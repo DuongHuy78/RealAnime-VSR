@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-app-bg: #121316;
+  --color-app-panel: #17191d;
+  --color-app-card: #1d1f25;
+  --color-app-subtle: #22252c;
+  --color-app-border: #262930;
+  --color-app-border-light: #343842;
+  --color-app-neon: #b9f73a;
+  --color-app-neon-hover: #c6ff47;
+  --color-app-text-muted: #7d8494;
+
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", sans-serif;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #121316;
+}
+::-webkit-scrollbar-thumb {
+  background: #262930;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #343842;
+}
+
+/* Comparison divider bar & slider glow */
+.slider-divider {
+  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.1) 100%);
+  box-shadow: 0 0 15px rgba(0,0,0,0.8), 0 0 10px rgba(185, 247, 58, 0.4);
+}
+
+/* Shimmer flare animation */
+.btn-flare {
+  position: relative;
+  overflow: hidden;
+}
+.btn-flare::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: 15%;
+  width: 52px;
+  height: 90px;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
+  transform: rotate(30deg);
+  pointer-events: none;
+  animation: flareMove 3.5s infinite ease-in-out;
+}
+
+@keyframes flareMove {
+  0%, 100% {
+    right: 15%;
+    opacity: 0.8;
+  }
+  50% {
+    right: 75%;
+    opacity: 0.4;
+  }
+}
+
+/* Pulse animation for active badges */
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 6px #b9f73a, inset 0 0 4px #b9f73a;
+  }
+  50% {
+    box-shadow: 0 0 14px #b9f73a, inset 0 0 8px #b9f73a;
+  }
+}
+
+.neon-live-indicator {
+  animation: neonPulse 2.5s infinite;
+}

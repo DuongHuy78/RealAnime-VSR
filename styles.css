@@ -1,0 +1,156 @@
+/* Custom studio styles for The Post-Production Studio */
+
+/* Base font and resets */
+:root {
+  --app-bg: #121316;
+  --app-panel: #17191d;
+  --app-card: #1d1f25;
+  --app-subtle: #22252c;
+  --app-border: #262930;
+  --app-border-light: #343842;
+  --app-neon: #b9f73a;
+  --app-neon-glow: rgba(185, 247, 58, 0.25);
+  --app-text-muted: #7d8494;
+}
+
+body {
+  background-color: var(--app-bg);
+  color: #e5e7eb;
+  font-family: 'JetBrains Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #121316;
+}
+::-webkit-scrollbar-thumb {
+  background: #262930;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #343842;
+}
+
+/* Comparison divider bar & slider glow */
+.slider-divider {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.08) 100%);
+  box-shadow: 0 0 20px rgba(0,0,0,0.8), 0 0 8px rgba(185, 247, 58, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+/* Shimmer flare on button */
+.btn-flare {
+  position: relative;
+  overflow: hidden;
+}
+.btn-flare::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: 15%;
+  width: 52px;
+  height: 90px;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
+  transform: rotate(30deg);
+  pointer-events: none;
+  animation: flareMove 3.5s infinite ease-in-out;
+}
+
+@keyframes flareMove {
+  0%, 100% {
+    right: 15%;
+    opacity: 0.8;
+  }
+  50% {
+    right: 75%;
+    opacity: 0.4;
+  }
+}
+
+/* Pulse animation for active badges */
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 6px #b9f73a, inset 0 0 4px #b9f73a;
+  }
+  50% {
+    box-shadow: 0 0 14px #b9f73a, inset 0 0 8px #b9f73a;
+  }
+}
+
+.neon-live-indicator {
+  animation: neonPulse 2s infinite;
+}
+
+/* Glass panel */
+.glass-panel {
+  background: rgba(23, 25, 29, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid #262930;
+}
+
+/* Card hover animation */
+.asset-card {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.asset-card:hover {
+  transform: translateY(-1px);
+  border-color: #343842;
+}
+.asset-card.active {
+  border-color: #b9f73a;
+  box-shadow: 0 0 12px rgba(185, 247, 58, 0.15);
+}
+
+/* Tooltip helper */
+.tooltip-container {
+  position: relative;
+}
+.tooltip-container:hover .tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.tooltip-content {
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #1d1f25;
+  border: 1px solid #343842;
+  color: #e5e7eb;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.15s ease-out;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+/* Diff heatmap mode visual effect */
+.diff-heatmap-filter {
+  filter: invert(1) hue-rotate(180deg) saturate(2);
+}
+
+/* Log console scanline effect */
+.scanline-bg {
+  background: linear-gradient(
+    rgba(18, 19, 22, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.03)
+  );
+  background-size: 100% 4px, 6px 100%;
+}

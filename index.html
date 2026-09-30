@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>The Post-Production Studio - AI Video Super-Resolution & Processing</title>
+  
+  <!-- Tailwind CSS CDN with plugins -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Google Fonts: JetBrains Mono and Inter -->
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+  
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="styles.css"/>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#121316',
+              panel: '#17191d',
+              card: '#1d1f25',
+              subtle: '#22252c',
+              border: '#262930',
+              borderLight: '#343842',
+              neon: '#b9f73a',
+              neonHover: '#c6ff47',
+              textMuted: '#7d8494',
+            }
+          },
+          fontFamily: {
+            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-[#121316] text-[#d1d5db] flex flex-col justify-start select-none">
+
+
+  <!-- ========================================== -->
+  <!-- BEGIN: ApplicationTopBar                   -->
+  <!-- ========================================== -->
+  <div class="px-5 py-2.5 flex items-center justify-between border-b border-[#262930] text-xs bg-[#17191d]" data-purpose="app-navbar">
+    <div class="flex items-center space-x-4">
+      <!-- Camera/Studio Icon -->
+      <div class="text-[#b9f73a] flex items-center space-x-2">
+        <div class="p-1 rounded bg-[#22252c] border border-[#262930]">
+          <svg class="w-5 h-5 text-[#b9f73a]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+            <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-sm font-bold tracking-wider text-gray-100 uppercase">The Post-Production Studio</h1>
+          <span class="text-[9px] bg-[#22252c] border border-[#262930] text-[#b9f73a] px-1.5 py-0.5 rounded font-mono font-medium">v2.4 PRO</span>
+        </div>
+        
+      </div>
+
+    </div>
+
+    <!-- Top Right Action Controls -->
+    <div class="flex items-center space-x-2">
+      <!-- Audio feedback toggle -->
+      <button id="btnAudioToggle" class="bg-[#1a1c22] hover:bg-[#22252c] text-gray-300 text-[11px] px-2.5 py-1 rounded border border-[#262930] flex items-center space-x-1" title="Toggle audio feedback">
+        <span class="text-[#b9f73a]">🔊</span>
+        <span class="hidden sm:inline">SFX: ON</span>
+      </button>
+
+      <!-- Keyboard shortcuts dialog button -->
+      <button id="btnShortcuts" class="bg-[#1a1c22] hover:bg-[#22252c] text-gray-300 text-[11px] px-2.5 py-1 rounded border border-[#262930] flex items-center space-x-1" title="View Keyboard Shortcuts">
+        <span class="font-mono text-[10px] text-gray-400">⌨ [?]</span>
+      </button>
+
+    </div>
+  </div>
+  <!-- END: ApplicationTopBar -->
+
+  <!-- ========================================================================= -->
+  <!-- SCREEN 1: STUDIO VIEWPORT (PRIMARY WORKSPACE)                            -->
+  <!-- ========================================================================= -->
+  <main id="screen-studio" class="screen-content flex-1 p-4 grid grid-cols-12 gap-4 items-start">
+    <!-- LEFT PANEL: INPUT ASSETS -->
+    <section class="col-span-12 lg:col-span-2 bg-[#17191d] border border-[#262930] rounded-md p-3 flex flex-col space-y-3 min-h-[580px]" data-purpose="input-assets-column">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-semibold tracking-wider text-gray-300 uppercase">Input Assets</h2>
+        <span class="text-[10px] text-gray-500 font-mono" id="assetCountBadge">4 items</span>
+      </div>
+
+      <!-- Upload Trigger Button -->
+      <button id="btnAssetUpload" class="w-full bg-[#1e2026] hover:bg-[#252830] border border-dashed border-[#343842] hover:border-[#b9f73a] text-gray-400 hover:text-gray-200 py-2 rounded text-[11px] flex items-center justify-center space-x-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5 text-[#b9f73a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"></path></svg>
+        <span>Import New Media</span>
+      </button>
+      <input type="file" id="fileInput" accept="image/*,video/*" class="hidden"/>
+
+      <!-- Assets List (Clickable cards) -->
+      <div class="space-y-2 max-h-[380px] overflow-y-auto pr-1" id="assetListContainer">
+        <!-- Item 1 (Active by default) -->
+        <div class="asset-card active border border-[#262930] bg-[#1a1c22] rounded p-1.5 cursor-pointer" data-asset-id="sedan_drive">
+          <div class="w-full h-20 bg-black rounded overflow-hidden relative">
+            <img id="thumb-sedan" alt="Sedan Grille Preview" class="w-full h-full object-cover object-[24%_30%] scale-110" src="assets/thumb_sedan.jpg"/>
+            <span class="absolute top-1 right-1 bg-black/80 text-[8px] font-mono px-1 rounded text-emerald-400 border border-emerald-500/30">720p</span>
+          </div>
+          <div class="mt-1.5">
+            <div class="text-[11px] font-medium text-gray-200 truncate">clip_sample_01.mp4</div>
+            <div class="text-[9px] text-gray-400 flex justify-between">
+              <span>Downtown Drive</span>
+              <span>24.5 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 2: Cyberpunk Alley -->
+        <div class="asset-card border border-[#262930] bg-[#1a1c22] rounded p-1.5 cursor-pointer" data-asset-id="cyberpunk_alley">
+          <div class="w-full h-20 bg-black rounded overflow-hidden relative">
+            <img alt="Cyberpunk Night Preview" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=400&q=80"/>
+            <span class="absolute top-1 right-1 bg-black/80 text-[8px] font-mono px-1 rounded text-cyan-400 border border-cyan-500/30">1080p</span>
+          </div>
+          <div class="mt-1.5">
+            <div class="text-[11px] font-medium text-gray-200 truncate">cyber_alley_night.mp4</div>
+            <div class="text-[9px] text-gray-400 flex justify-between">
+              <span>Neon Low-light</span>
+              <span>48.2 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 3: Face Portrait -->
+        <div class="asset-card border border-[#262930] bg-[#1a1c22] rounded p-1.5 cursor-pointer" data-asset-id="vintage_portrait">
+          <div class="w-full h-20 bg-black rounded overflow-hidden relative">
+            <img alt="Portrait Preview" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"/>
+            <span class="absolute top-1 right-1 bg-black/80 text-[8px] font-mono px-1 rounded text-amber-400 border border-amber-500/30">480p</span>
+          </div>
+          <div class="mt-1.5">
+            <div class="text-[11px] font-medium text-gray-200 truncate">vintage_portrait_crop.mp4</div>
+            <div class="text-[9px] text-gray-400 flex justify-between">
+              <span>Face Restoration</span>
+              <span>12.8 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 4: Anime Sakuga -->
+        <div class="asset-card border border-[#262930] bg-[#1a1c22] rounded p-1.5 cursor-pointer" data-asset-id="anime_sakuga">
+          <div class="w-full h-20 bg-black rounded overflow-hidden relative">
+            <img alt="Anime Preview" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=400&q=80"/>
+            <span class="absolute top-1 right-1 bg-black/80 text-[8px] font-mono px-1 rounded text-purple-400 border border-purple-500/30">720p</span>
+          </div>
+          <div class="mt-1.5">
+            <div class="text-[11px] font-medium text-gray-200 truncate">sakuga_battle_720.mp4</div>
+            <div class="text-[9px] text-gray-400 flex justify-between">
+              <span>2D Animation</span>
+              <span>31.0 MB</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Details -->
+      <div class="text-[10px] text-gray-400 space-y-1.5 pt-2 border-t border-[#262930]/60 mt-auto" id="assetMetadataBox">
+        <div>Input: <span class="text-gray-200 font-mono" id="metaFilename">clip_sample_01.mp4</span></div>
+        <div>Resolution: <span class="text-gray-200 font-mono" id="metaRes">1280 x 720 (720p)</span></div>
+        <div>Frame Rate: <span class="text-gray-200 font-mono" id="metaFps">29.97 fps</span></div>
+        <div>Size: <span class="text-gray-200 font-mono" id="metaSize">24.5 MB</span></div>
+        <div>Duration: <span class="text-gray-200 font-mono" id="metaDuration">00:00:20 (620f)</span></div>
+      </div>
+    </section>
+
+    <!-- CENTER PANEL: VIDEO SCRUBBER & BEFORE/AFTER VIEWER -->
+    <section class="col-span-12 lg:col-span-7 bg-[#17191d] border border-[#262930] rounded-md p-3 flex flex-col space-y-2" data-purpose="viewport-comparison">
+      <!-- Title & View Controls Toolbar -->
+      <div class="flex items-center justify-between">
+        <div class="text-xs font-semibold tracking-wider text-gray-200 uppercase flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-[#b9f73a]"></span>
+          <span id="viewportTitle">DOWNTOWN_DRIVE_002.MP4</span>
+        </div>
+        
+        <!-- View Mode Switcher -->
+        <div class="flex items-center space-x-1.5 text-[10px]">
+          <!-- Zoom options -->
+          <div class="bg-[#121316] border border-[#262930] rounded px-1.5 py-0.5 flex items-center space-x-1">
+            <span class="text-gray-500">Zoom:</span>
+            <button class="zoom-btn px-1 text-gray-400 hover:text-white" data-zoom="fit">Fit</button>
+            <button class="zoom-btn active px-1 text-[#b9f73a] font-semibold" data-zoom="100">100%</button>
+            <button class="zoom-btn px-1 text-gray-400 hover:text-white" data-zoom="200">200%</button>
+          </div>
+
+          <!-- Comparison Mode -->
+          <div class="bg-[#121316] border border-[#262930] rounded p-0.5 flex space-x-1" id="viewModeSelector">
+            <button class="view-mode-btn active px-2 py-0.5 bg-[#22252c] text-white rounded text-[10px]" data-mode="split" title="Split Screen Slider">Split</button>
+            <button class="view-mode-btn px-2 py-0.5 text-gray-400 hover:text-white rounded text-[10px]" data-mode="diff" title="Difference Heatmap">Diff Heatmap</button>
+            <button class="view-mode-btn px-2 py-0.5 text-gray-400 hover:text-white rounded text-[10px]" data-mode="after-only" title="4X Enhanced Only">4X Only</button>
+          </div>
+
+          <!-- Loupe Magnifier Toggle -->
+          <button id="btnLoupeToggle" class="bg-[#121316] border border-[#262930] hover:border-[#343842] px-2 py-1 rounded text-gray-400 hover:text-white flex items-center space-x-1" title="Toggle 8X Pixel Loupe Magnifier">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path></svg>
+            <span class="hidden sm:inline">Loupe</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Video Canvas Container -->
+      <div id="viewportContainer" class="relative w-full h-[420px] bg-black rounded overflow-hidden border border-[#262930] flex select-none cursor-crosshair">
+        
+        <!-- Left Side: BEFORE (Original) -->
+        <div id="beforeLayer" class="relative w-[38%] h-full overflow-hidden border-r border-black/40 z-10">
+          <img id="beforeImg" alt="Before Upscaling" class="absolute top-0 left-0 h-full w-[900px] max-w-none object-cover object-[26%_40%] blur-[0.6px] contrast-95 brightness-95" src="assets/sedan_before.jpg"/>
+          
+          <!-- Label: BEFORE -->
+          <div class="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded text-[10px] tracking-wide text-gray-200 border border-white/10 z-20 flex items-center space-x-1.5 shadow-lg">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+            <span class="font-bold">BEFORE</span> <span class="text-gray-400" id="beforeBadgeText">(720p Original)</span>
+          </div>
+        </div>
+
+        <!-- Split Divider / Handle Bar (Draggable) -->
+        <div id="sliderHandle" class="absolute top-0 bottom-0 left-[38%] w-[34px] -ml-[17px] z-30 flex items-center justify-center cursor-ew-resize">
+          <!-- Glass Handle line -->
+          <div class="h-full w-full slider-divider rounded-full flex items-center justify-center shadow-2xl">
+            <!-- Center grip pill -->
+            <div class="w-5 h-8 bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/50 rounded-full flex items-center justify-center text-[10px] text-white shadow-lg transition-transform active:scale-95">
+              <span class="scale-y-75 tracking-tighter font-mono font-bold">&lt; &gt;</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: AFTER (4x Upscaled) -->
+        <div id="afterLayer" class="absolute inset-0 h-full w-full overflow-hidden z-0">
+          <img id="afterImg" alt="After Upscaling" class="absolute top-0 right-0 h-full w-[900px] max-w-none object-cover object-[62%_40%] filter contrast-105 saturate-105" src="assets/sedan_after.jpg"/>
+          
+          <!-- Label: AFTER -->
+          <div class="absolute bottom-3 right-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded text-[10px] tracking-wide text-gray-200 border border-white/10 z-20 flex items-center space-x-1.5 shadow-lg">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#b9f73a]"></span>
+            <span class="font-bold">AFTER</span> <span class="text-gray-400" id="afterBadgeText">(4x Upscaled to 5120x2880)</span>
+          </div>
+        </div>
+
+        <!-- Loupe Magnifier Bubble (Hidden by default, moves with cursor when enabled) -->
+        <div id="loupeBubble" class="hidden absolute w-36 h-36 rounded-full border-2 border-[#b9f73a] shadow-[0_0_20px_rgba(185,247,58,0.5)] overflow-hidden pointer-events-none z-40 bg-black">
+          <canvas id="loupeCanvas" width="144" height="144" class="w-full h-full"></canvas>
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-2 h-2 border border-[#b9f73a]"></div>
+          </div>
+          <div class="absolute bottom-1 w-full text-center text-[8px] font-mono text-[#b9f73a] bg-black/70 py-0.5">8X MAGNIFIER</div>
+        </div>
+      </div>
+
+      <!-- Scrubber Timeline Section -->
+      <div class="pt-2 bg-[#141519] p-2.5 rounded border border-[#262930]" data-purpose="timeline-scrubber">
+        <!-- Playback control row -->
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-2">
+            <!-- Step Back 1 Frame -->
+            <button id="btnStepBack" class="p-1 text-gray-400 hover:text-white rounded bg-[#1e2026] border border-[#262930]" title="Previous Frame (J / ←)">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+            </button>
+
+            <!-- Play / Pause Button -->
+            <button id="btnPlayPause" class="px-3 py-1 bg-[#22252d] hover:bg-[#2d323c] text-white rounded border border-[#373c46] flex items-center space-x-1.5 text-xs font-semibold" title="Play/Pause (Space)">
+              <span id="playIcon">▶</span>
+              <span id="playText">PLAY</span>
+            </button>
+
+            <!-- Step Forward 1 Frame -->
+            <button id="btnStepForward" class="p-1 text-gray-400 hover:text-white rounded bg-[#1e2026] border border-[#262930]" title="Next Frame (L / →)">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+            </button>
+
+            <!-- Loop toggle -->
+            <button id="btnLoopToggle" class="px-2 py-1 bg-[#1e2026] text-[#b9f73a] border border-[#262930] rounded text-[10px] font-mono" title="Toggle Loop">
+              LOOP: ON
+            </button>
+          </div>
+
+          <!-- Current Timecode & Frame Indicator -->
+          <div class="flex items-center space-x-3 text-xs font-mono">
+            <span class="text-gray-400 text-[11px]">TC:</span>
+            <span id="timecodeDisplay" class="text-white font-bold bg-[#121316] px-2 py-0.5 rounded border border-[#262930]">00:00:06.12</span>
+            <span class="text-gray-500">|</span>
+            <span id="frameNumberDisplay" class="text-emerald-400">184 / 620 f</span>
+          </div>
+
+          <!-- Export Snapshot Button -->
+          <button id="btnSnapshot" class="text-[10px] bg-[#1e2026] hover:bg-[#252830] text-gray-300 px-2 py-1 rounded border border-[#262930] flex items-center space-x-1" title="Export Current Frame as PNG">
+            <svg class="w-3 h-3 text-[#b9f73a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <span>Snapshot</span>
+          </button>
+        </div>
+
+        <!-- Scrubber ticks & labels -->
+        <div class="flex justify-between text-[9px] text-gray-500 font-mono px-2 mb-1">
+          <span>00:00:00</span>
+          <span>00:00:05</span>
+          <span class="text-white font-semibold">00:00:06 (Cur)</span>
+          <span>00:00:10</span>
+          <span>00:00:15</span>
+          <span>00:00:20</span>
+        </div>
+
+        <!-- Scrubber Track & Needle (Clickable & Draggable) -->
+        <div id="timelineTrack" class="relative w-full h-5 flex items-center px-1 cursor-pointer">
+          <!-- Background rail -->
+          <div class="w-full h-1.5 bg-[#262930] rounded-full relative overflow-visible">
+            <!-- Subdivisions / tick marks -->
+            <div class="absolute inset-0 flex justify-between px-1 -top-1 pointer-events-none">
+              <span class="w-[1px] h-3.5 bg-[#343842]"></span>
+              <span class="w-[1px] h-2 bg-[#2d313a]"></span>
+              <span class="w-[1px] h-3.5 bg-[#343842]"></span>
+              <span class="w-[1px] h-2 bg-[#2d313a]"></span>
+              <span class="w-[1px] h-3.5 bg-[#343842]"></span>
+              <span class="w-[1px] h-2 bg-[#2d313a]"></span>
+              <span class="w-[1px] h-3.5 bg-[#343842]"></span>
+              <span class="w-[1px] h-2 bg-[#2d313a]"></span>
+              <span class="w-[1px] h-3.5 bg-[#343842]"></span>
+            </div>
+            <!-- Cached frames progress bar -->
+            <div id="cachedTrack" class="h-1.5 bg-gray-600/40 rounded-full w-[70%] absolute left-0 top-0"></div>
+            <!-- Active progress filled line -->
+            <div id="timelineProgress" class="h-1.5 bg-[#b9f73a] rounded-full w-[29.6%] shadow-[0_0_8px_#b9f73a] relative z-10"></div>
+          </div>
+
+          <!-- Needle Indicator / Draggable Pill -->
+          <div id="scrubberNeedle" class="absolute left-[29.6%] -top-0.5 -translate-x-1/2 flex flex-col items-center cursor-ew-resize z-20">
+            <div class="w-3 h-4 bg-white rounded-sm shadow-md flex items-center justify-center border border-gray-300">
+              <div class="w-[1px] h-2 bg-[#121316]"></div>
+            </div>
+            <div class="w-2 h-2 bg-white rotate-45 -mt-1 shadow-sm"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: INFERENCE & EXECUTION -->
+    <section class="col-span-12 lg:col-span-3 flex flex-col space-y-3" data-purpose="execution-panel">
+      <!-- Top header bar for panel -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-200">Inference &amp; Execution</h2>
+      </div>
+
+      <!-- Execution Parameters Card -->
+      <div class="bg-[#17191d] border border-[#262930] rounded-md p-3.5 space-y-3.5 text-xs">
+        <h3 class="text-[11px] font-semibold tracking-wider text-gray-400 uppercase flex items-center justify-between">
+          <span>Pipeline Execution &amp; Metrics</span>
+          <span class="text-[9px] text-[#b9f73a] bg-[#121316] px-1.5 py-0.5 rounded border border-[#262930]">TensorRT 10.1</span>
+        </h3>
+
+        <!-- Model Checkpoint Selector -->
+        <div class="space-y-1">
+          <label class="block text-[10px] text-gray-400">MODEL CHECKPOINT (Architecture)</label>
+          <select id="modelSelect" class="w-full bg-[#1e2026] border border-[#262930] rounded px-2.5 py-1.5 text-gray-200 text-[11px] font-mono focus:border-[#b9f73a] focus:outline-none">
+            <option value="realesrgan_x4plus" selected>realesrgan_x4plus.pth (RRDBNet)</option>
+            <option value="real_cugan_pro">real_cugan_pro_3x.pth (Anime/Sakuga)</option>
+            <option value="rife_v4_interp">rife_v4_15_motion.pth (Frame Interpolation)</option>
+            <option value="gfpgan_v1.4">gfpgan_v1.4_clean.pth (Face Enhancement)</option>
+            <option value="bsrgan_x4">bsrgan_x4_denoise.pth (Legacy Deblur)</option>
+          </select>
+        </div>
+
+        <!-- Resolution Scaling -->
+        <div class="space-y-1">
+          <label class="block text-[10px] text-gray-400">RESOLUTION SCALING</label>
+          <div class="flex items-center space-x-2">
+            <!-- Input res -->
+            <div class="flex-1 bg-[#1e2026] border border-[#262930] rounded px-2 py-1.5 text-[10px] leading-tight">
+              <span class="text-gray-400 block text-[9px]">INPUT:</span>
+              <span class="text-gray-200 font-mono" id="scaleInputText">1280 x 720 (720p)</span>
+            </div>
+            <!-- Arrow -->
+            <span class="text-gray-500 font-bold">→</span>
+            <!-- Output res -->
+            <div class="flex-1 bg-[#1e2026] border border-[#262930] rounded px-2 py-1.5 text-[10px] leading-tight">
+              <span class="text-gray-400 block text-[9px]" id="scaleFactorLabel">OUTPUT (4X):</span>
+              <span class="text-[#b9f73a] font-mono font-semibold" id="scaleOutputText">5120 x 2880</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sliding Window (Batch Size) -->
+        <div class="space-y-1">
+          <label class="block text-[10px] text-gray-400">SLIDING WINDOW (BATCH SIZE)</label>
+          <div class="grid grid-cols-4 gap-1 bg-[#131418] p-1 rounded border border-[#262930]" id="batchToggleGroup">
+            <button class="batch-btn py-1 text-center text-xs text-gray-400 hover:text-gray-200 rounded" data-batch="7">7</button>
+            <button class="batch-btn py-1 text-center text-xs font-semibold text-white bg-[#22252d] border border-[#373c46] rounded shadow-inner" data-batch="12">12</button>
+            <button class="batch-btn py-1 text-center text-xs text-gray-400 hover:text-gray-200 rounded" data-batch="16">16</button>
+            <button class="batch-btn py-1 text-center text-xs text-gray-400 hover:text-gray-200 rounded" data-batch="24">24</button>
+          </div>
+        </div>
+
+        <!-- Runtime Metrics (Live Stats) -->
+        <div class="pt-2 border-t border-[#262930] space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+              Runtime Metrics (Live Stats)
+            </h4>
+            <span id="statusIndicatorBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">READY</span>
+          </div>
+
+          <div class="space-y-1.5 text-[11px]">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Processing Time</span>
+              <span id="statTimer" class="font-mono text-gray-200 font-medium">00:02:14.35</span>
+            </div>
+            
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Inference FPS</span>
+              <div class="flex items-center space-x-1.5">
+                <!-- Tiny sparkline canvas -->
+                <canvas id="fpsSparkline" width="48" height="14" class="rounded bg-[#121316]"></canvas>
+                <span id="statFps" class="font-mono text-[#b9f73a] font-medium">24.6 FPS</span>
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Frames Processed</span>
+              <span id="statFrames" class="font-mono text-gray-200 font-medium">184 / 620 frames</span>
+            </div>
+
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Hardware VRAM / Temp</span>
+              <span class="font-mono text-gray-300 font-medium"><span id="statVram">6.4 GB</span> / <span id="statTemp">64°C</span></span>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="space-y-1 pt-1">
+              <div class="w-full bg-[#131418] h-1.5 rounded-full overflow-hidden border border-[#262930]">
+                <div id="statProgressBar" class="bg-[#a3e635] h-full rounded-full w-1/2 shadow-[0_0_8px_#a3e635] transition-all duration-200"></div>
+              </div>
+              <div class="flex justify-between text-[10px] text-gray-400 font-mono">
+                <span id="statEta">ETA: 00:01:45</span>
+                <span id="statPercentage">50%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Mini Terminal Log -->
+        <div class="pt-2 border-t border-[#262930]">
+          <div class="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+            <span>TERMINAL LOG</span>
+            <button id="btnClearLog" class="hover:text-gray-300">clear</button>
+          </div>
+          <div id="terminalLog" class="h-20 bg-[#101114] border border-[#22252c] rounded p-1.5 font-mono text-[9px] text-gray-400 overflow-y-auto scanline-bg space-y-0.5">
+            <div>[INIT] TensorRT engine compiled with FP16 enabled.</div>
+            <div>[LOAD] Checkpoint: realesrgan_x4plus.pth (RRDBNet 23 blocks)</div>
+            <div>[WARMUP] CUDA context initialized. Memory pinned.</div>
+            <div class="text-[#b9f73a]">[READY] Pipeline standing by for inference start.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button: START INFERENCE -->
+      <!-- Sparkle & Glow button matching screenshot -->
+      <button id="btnStartInference" class="w-full btn-flare py-3 px-4 rounded-md font-bold text-xs uppercase tracking-wider bg-[#b9f73a] hover:bg-[#c6ff47] active:scale-[0.99] text-black transition-all flex items-center justify-center shadow-[0_0_15px_rgba(185,247,58,0.2)]" data-purpose="start-inference-button">
+        <span id="inferenceBtnText">START INFERENCE</span>
+      </button>
+
+      <!-- Secondary Action: Export Asset -->
+      <button id="btnOpenExport" class="w-full py-2 px-3 rounded text-[11px] font-medium bg-[#1d1f25] hover:bg-[#262930] text-gray-300 border border-[#262930] flex items-center justify-center space-x-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5 text-[#b9f73a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        <span>Export Enhanced Video...</span>
+      </button>
+    </section>
+  </main>
+  <!-- END: MainWorkspaceLayout -->
+
+
+  <!-- ========================================================================= -->
+  <!-- SCREEN 2: BATCH QUEUE (HÀNG ĐỢI XỬ LÝ HÀNG LOẠT)                           -->
+  <!-- ========================================================================= -->
+  <main id="screen-queue" class="screen-content hidden flex-1 p-5 space-y-4">
+    <!-- Header of Queue -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-100 uppercase tracking-wider flex items-center space-x-2">
+          <span>Batch Processing Pipeline &amp; Task Queue</span>
+          <span class="text-xs bg-[#22252c] text-[#b9f73a] px-2 py-0.5 rounded font-mono">3 Tasks Active</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Manage automated multi-video super-resolution tasks with automatic GPU scheduling.</p>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button id="btnNewBatchJob" class="bg-[#b9f73a] hover:bg-[#c6ff47] text-black font-bold px-3 py-1.5 rounded text-xs flex items-center space-x-1.5 shadow-[0_0_10px_rgba(185,247,58,0.2)]">
+          <span>+ Add Batch Task</span>
+        </button>
+        <button id="btnPauseAllQueue" class="bg-[#1d1f25] hover:bg-[#262930] text-gray-300 border border-[#262930] px-3 py-1.5 rounded text-xs">
+          Pause Queue
+        </button>
+      </div>
+    </div>
+
+    <!-- Metric Cards Row -->
+    <div class="grid grid-cols-4 gap-4">
+      <div class="bg-[#17191d] border border-[#262930] p-3 rounded-md">
+        <div class="text-[10px] text-gray-400 uppercase font-mono">Total Tasks in Session</div>
+        <div class="text-xl font-bold text-gray-100 font-mono mt-1">8 Jobs</div>
+        <div class="text-[9px] text-gray-500 mt-1">3 Completed · 2 Active · 3 Queued</div>
+      </div>
+      <div class="bg-[#17191d] border border-[#262930] p-3 rounded-md">
+        <div class="text-[10px] text-gray-400 uppercase font-mono">Aggregate Throughput</div>
+        <div class="text-xl font-bold text-[#b9f73a] font-mono mt-1">48.2 FPS</div>
+        <div class="text-[9px] text-gray-500 mt-1">Peak hardware acceleration (RTX 4090)</div>
+      </div>
+      <div class="bg-[#17191d] border border-[#262930] p-3 rounded-md">
+        <div class="text-[10px] text-gray-400 uppercase font-mono">VRAM Allocated</div>
+        <div class="text-xl font-bold text-cyan-400 font-mono mt-1">9.8 / 24 GB</div>
+        <div class="text-[9px] text-gray-500 mt-1">Shared buffer across 2 worker streams</div>
+      </div>
+      <div class="bg-[#17191d] border border-[#262930] p-3 rounded-md">
+        <div class="text-[10px] text-gray-400 uppercase font-mono">Estimated Time Remaining</div>
+        <div class="text-xl font-bold text-amber-400 font-mono mt-1">00:06:40</div>
+        <div class="text-[9px] text-gray-500 mt-1">Next completion in ~45 seconds</div>
+      </div>
+    </div>
+
+    <!-- Batch Table -->
+    <div class="bg-[#17191d] border border-[#262930] rounded-md overflow-hidden">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-[#121316] text-gray-400 border-b border-[#262930] uppercase text-[10px] font-mono">
+          <tr>
+            <th class="p-3">Job ID</th>
+            <th class="p-3">Input Source</th>
+            <th class="p-3">Model Applied</th>
+            <th class="p-3">Scaling</th>
+            <th class="p-3">Progress</th>
+            <th class="p-3">Inference Speed</th>
+            <th class="p-3">Status</th>
+            <th class="p-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#262930] font-mono text-[11px]" id="batchTableBody">
+          <!-- Row 1: Running -->
+          <tr class="hover:bg-[#1d1f25]/50 transition-colors">
+            <td class="p-3 text-gray-400">#JOB-1082</td>
+            <td class="p-3 text-white font-medium">downtown_drive_002.mp4</td>
+            <td class="p-3 text-emerald-400">RealESRGAN_x4plus</td>
+            <td class="p-3 text-gray-300">720p → 4K (4X)</td>
+            <td class="p-3 w-48">
+              <div class="w-full bg-[#121316] h-1.5 rounded-full overflow-hidden border border-[#262930]">
+                <div class="bg-[#b9f73a] h-full w-[54%]"></div>
+              </div>
+              <div class="text-[9px] text-gray-400 mt-1 flex justify-between">
+                <span>335/620 f</span>
+                <span>54%</span>
+              </div>
+            </td>
+            <td class="p-3 text-[#b9f73a]">24.6 FPS</td>
+            <td class="p-3">
+              <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Rendering</span>
+            </td>
+            <td class="p-3 text-right space-x-1.5">
+              <button class="hover:text-white text-gray-400 p-1" title="Pause">⏸</button>
+              <button class="hover:text-white text-[#b9f73a] p-1 font-sans text-xs" title="Open in Viewport">Inspect</button>
+            </td>
+          </tr>
+
+          <!-- Row 2: Running -->
+          <tr class="hover:bg-[#1d1f25]/50 transition-colors">
+            <td class="p-3 text-gray-400">#JOB-1083</td>
+            <td class="p-3 text-white font-medium">cyber_alley_night.mp4</td>
+            <td class="p-3 text-cyan-400">BSRGAN_x4_denoise</td>
+            <td class="p-3 text-gray-300">1080p → 4K (2X)</td>
+            <td class="p-3 w-48">
+              <div class="w-full bg-[#121316] h-1.5 rounded-full overflow-hidden border border-[#262930]">
+                <div class="bg-cyan-400 h-full w-[28%]"></div>
+              </div>
+              <div class="text-[9px] text-gray-400 mt-1 flex justify-between">
+                <span>168/600 f</span>
+                <span>28%</span>
+              </div>
+            </td>
+            <td class="p-3 text-cyan-400">23.8 FPS</td>
+            <td class="p-3">
+              <span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Rendering</span>
+            </td>
+            <td class="p-3 text-right space-x-1.5">
+              <button class="hover:text-white text-gray-400 p-1" title="Pause">⏸</button>
+              <button class="hover:text-white text-cyan-400 p-1 font-sans text-xs">Inspect</button>
+            </td>
+          </tr>
+
+          <!-- Row 3: Queued -->
+          <tr class="hover:bg-[#1d1f25]/50 transition-colors">
+            <td class="p-3 text-gray-400">#JOB-1084</td>
+            <td class="p-3 text-white font-medium">vintage_portrait_crop.mp4</td>
+            <td class="p-3 text-amber-400">GFPGAN_v1.4_Face</td>
+            <td class="p-3 text-gray-300">480p → 1080p (2.2X)</td>
+            <td class="p-3 w-48 text-gray-500 text-[10px]">Waiting for GPU worker slot...</td>
+            <td class="p-3 text-gray-500">--</td>
+            <td class="p-3">
+              <span class="bg-gray-500/20 text-gray-300 border border-gray-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Queued</span>
+            </td>
+            <td class="p-3 text-right space-x-1.5">
+              <button class="hover:text-red-400 text-gray-500 p-1" title="Remove">✕</button>
+            </td>
+          </tr>
+
+          <!-- Row 4: Finished -->
+          <tr class="hover:bg-[#1d1f25]/50 transition-colors bg-[#141519]/40">
+            <td class="p-3 text-gray-500">#JOB-1080</td>
+            <td class="p-3 text-gray-300">nature_drone_cinematic.mov</td>
+            <td class="p-3 text-gray-400">RealESRGAN_x4plus</td>
+            <td class="p-3 text-gray-400">1080p → 4K UHD</td>
+            <td class="p-3 w-48">
+              <div class="w-full bg-[#121316] h-1.5 rounded-full overflow-hidden border border-[#262930]">
+                <div class="bg-emerald-400 h-full w-full"></div>
+              </div>
+              <div class="text-[9px] text-emerald-400 mt-1">Completed (900/900 f)</div>
+            </td>
+            <td class="p-3 text-gray-400">Avg 25.1 FPS</td>
+            <td class="p-3">
+              <span class="bg-emerald-900/30 text-emerald-400 border border-emerald-600/40 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Finished</span>
+            </td>
+            <td class="p-3 text-right space-x-1.5">
+              <button class="bg-[#1e2026] hover:bg-[#272b35] text-white px-2 py-0.5 rounded border border-[#262930] text-[10px] font-sans">Download</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+
+  <!-- ========================================================================= -->
+  <!-- SCREEN 3: DEEP QUALITY INSPECTOR (PHÂN TÍCH CHẤT LƯỢNG & METRICS)         -->
+  <!-- ========================================================================= -->
+  <main id="screen-inspector" class="screen-content hidden flex-1 p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-100 uppercase tracking-wider flex items-center space-x-2">
+          <span>Deep Quality Inspector &amp; Metric Diagnostics</span>
+          <span class="text-xs bg-[#22252c] text-cyan-400 px-2 py-0.5 rounded font-mono">PSNR: 35.4 dB · SSIM: 0.952</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Pixel-level perceptual analysis, high-frequency edge reconstruction verification, and color fidelity.</p>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <select id="inspectorChannel" class="bg-[#17191d] border border-[#262930] text-gray-200 text-xs px-2.5 py-1.5 rounded font-mono">
+          <option value="rgb">Full RGB Spectrum</option>
+          <option value="luma">Luma (Y Channel)</option>
+          <option value="diff">High-Pass Residual Diff</option>
+          <option value="edges">Sobel Edge Gradient</option>
+        </select>
+        <button id="btnRecalcMetrics" class="bg-[#1d1f25] hover:bg-[#262930] text-white border border-[#262930] text-xs px-3 py-1.5 rounded flex items-center space-x-1">
+          <span>🔄 Recalculate Metrics</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Inspector Main Grid -->
+    <div class="grid grid-cols-12 gap-4">
+      <!-- Left: Side-by-side / Dual Viewport -->
+      <div class="col-span-8 bg-[#17191d] border border-[#262930] rounded-md p-3 space-y-3">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-semibold text-gray-300 uppercase">Synchronized Dual Inspection View (500% Pixel Probe)</span>
+          <div class="font-mono text-[10px] text-gray-400" id="pixelProbeCoords">Probe: X: 482, Y: 316 | R: 184 G: 202 B: 219</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 h-[380px]">
+          <!-- Box 1: Original Bicubic -->
+          <div class="bg-black rounded border border-[#262930] relative overflow-hidden flex flex-col">
+            <div class="absolute top-2 left-2 z-10 bg-black/80 text-[10px] px-2 py-0.5 rounded border border-white/10 text-red-400 font-mono">
+              ORIGINAL (Bicubic Upscaled)
+            </div>
+            <img class="w-full h-full object-cover object-[24%_30%] scale-150 blur-[1px]" src="assets/sedan_before.jpg" alt="Original bicubic"/>
+          </div>
+
+          <!-- Box 2: Real-ESRGAN Reconstruction -->
+          <div class="bg-black rounded border border-[#262930] relative overflow-hidden flex flex-col">
+            <div class="absolute top-2 left-2 z-10 bg-black/80 text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#b9f73a] font-mono">
+              AI SUPER-RESOLUTION (Real-ESRGAN)
+            </div>
+            <img class="w-full h-full object-cover object-[24%_30%] scale-150 filter contrast-110" src="assets/sedan_after.jpg" alt="AI Enhanced"/>
+          </div>
+        </div>
+
+        <div class="text-[10px] text-gray-500 font-mono flex justify-between px-1">
+          <span>Notice restored high-frequency mesh grille structure and crisp specular highlights.</span>
+          <span class="text-[#b9f73a]">Artifact score: 0.014 (Negligible)</span>
+        </div>
+      </div>
+
+      <!-- Right: Quantitative Metrics & Histograms -->
+      <div class="col-span-4 space-y-3">
+        <!-- Metrics Table -->
+        <div class="bg-[#17191d] border border-[#262930] rounded-md p-3.5 space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-300">Objective Fidelity Metrics</h3>
+          
+          <div class="space-y-2 text-xs font-mono">
+            <div class="flex justify-between items-center p-2 bg-[#121316] rounded border border-[#262930]">
+              <div>
+                <div class="text-gray-400 text-[10px]">PSNR (Peak Signal-to-Noise)</div>
+                <div class="text-base font-bold text-[#b9f73a]">35.42 dB</div>
+              </div>
+              <span class="text-[9px] text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-600/30">EXCELLENT</span>
+            </div>
+
+            <div class="flex justify-between items-center p-2 bg-[#121316] rounded border border-[#262930]">
+              <div>
+                <div class="text-gray-400 text-[10px]">SSIM (Structural Similarity)</div>
+                <div class="text-base font-bold text-cyan-400">0.952 / 1.000</div>
+              </div>
+              <span class="text-[9px] text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-600/30">VERY HIGH</span>
+            </div>
+
+            <div class="flex justify-between items-center p-2 bg-[#121316] rounded border border-[#262930]">
+              <div>
+                <div class="text-gray-400 text-[10px]">LPIPS (Perceptual Distance)</div>
+                <div class="text-base font-bold text-gray-200">0.078</div>
+              </div>
+              <span class="text-[9px] text-gray-400 bg-gray-800/40 px-1.5 py-0.5 rounded border border-gray-600/30">OPTIMAL</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RGB Histogram & Luminance Waveform -->
+        <div class="bg-[#17191d] border border-[#262930] rounded-md p-3.5 space-y-2">
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-semibold text-gray-300 uppercase text-[11px]">RGB Histogram &amp; Waveform</span>
+            <span class="text-[9px] text-gray-500 font-mono">Rec.709 8-bit</span>
+          </div>
+          <canvas id="histogramCanvas" width="280" height="110" class="w-full h-28 bg-[#101114] rounded border border-[#262930]"></canvas>
+          <div class="flex justify-between text-[9px] font-mono text-gray-500 px-1">
+            <span class="text-red-400">Red Channel</span>
+            <span class="text-emerald-400">Green Channel</span>
+            <span class="text-blue-400">Blue Channel</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ========================================================================= -->
+  <!-- SCREEN 4: AI MODEL ZOO (THƯ VIỆN CHECKPOINT & THUẬT TOÁN)                 -->
+  <!-- ========================================================================= -->
+  <main id="screen-models" class="screen-content hidden flex-1 p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-100 uppercase tracking-wider flex items-center space-x-2">
+          <span>Computer Vision Model Zoo &amp; Weights Hub</span>
+          <span class="text-xs bg-[#22252c] text-[#b9f73a] px-2 py-0.5 rounded font-mono">6 Models Ready</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Pre-trained neural architectures for Video Super-Resolution, Face Enhancement, and Temporal Interpolation.</p>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button id="btnImportModel" class="bg-[#1d1f25] hover:bg-[#262930] text-gray-200 border border-[#262930] text-xs px-3 py-1.5 rounded flex items-center space-x-1.5">
+          <span class="text-[#b9f73a]">+</span>
+          <span>Import Custom .onnx / .pth</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Filter Pills -->
+    <div class="flex items-center space-x-2 text-xs font-mono">
+      <button class="model-filter-btn active bg-[#22252c] text-white border border-[#343842] px-3 py-1 rounded" data-cat="all">All Models</button>
+      <button class="model-filter-btn text-gray-400 hover:text-white bg-[#17191d] border border-[#262930] px-3 py-1 rounded" data-cat="vsr">Super-Resolution</button>
+      <button class="model-filter-btn text-gray-400 hover:text-white bg-[#17191d] border border-[#262930] px-3 py-1 rounded" data-cat="face">Face Restoration</button>
+      <button class="model-filter-btn text-gray-400 hover:text-white bg-[#17191d] border border-[#262930] px-3 py-1 rounded" data-cat="interp">Frame Interpolation</button>
+      <button class="model-filter-btn text-gray-400 hover:text-white bg-[#17191d] border border-[#262930] px-3 py-1 rounded" data-cat="anime">Anime &amp; 2D</button>
+    </div>
+
+    <!-- Model Cards Grid -->
+    <div class="grid grid-cols-3 gap-4" id="modelCardsContainer">
+      <!-- Card 1: Real-ESRGAN -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">Super-Resolution</span>
+            <span class="text-[10px] font-mono text-gray-400">67 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">Real-ESRGAN x4plus</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            General photorealistic video and image super-resolution. Employs 23 RRDB residual dense blocks with high-frequency GAN discriminator.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Scale:</span> 4X Scaling</div>
+            <div><span class="text-gray-500">Latency:</span> ~41ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~3.2 GB</div>
+            <div><span class="text-gray-500">Format:</span> TensorRT / PyTorch</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#22252c] hover:bg-[#2e323b] text-[#b9f73a] border border-[#343842] rounded text-xs font-semibold mt-3" data-model="realesrgan_x4plus">
+          ✓ Active in Pipeline
+        </button>
+      </div>
+
+      <!-- Card 2: RIFE v4.15 -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded">Interpolation</span>
+            <span class="text-[10px] font-mono text-gray-400">42 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">RIFE v4.15 Flow Interp</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            Real-time Intermediate Flow Estimation for video frame interpolation. Converts 24/30 FPS footage to ultra-smooth 60 or 120 FPS.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Mode:</span> 2X / 4X FPS</div>
+            <div><span class="text-gray-500">Latency:</span> ~18ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~2.4 GB</div>
+            <div><span class="text-gray-500">Flow:</span> IFNet Engine</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#1d1f25] hover:bg-[#252830] text-gray-200 border border-[#262930] rounded text-xs font-semibold mt-3" data-model="rife_v4_interp">
+          Load into Pipeline
+        </button>
+      </div>
+
+      <!-- Card 3: GFPGAN v1.4 -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded">Face Restoration</span>
+            <span class="text-[10px] font-mono text-gray-400">332 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">GFPGAN v1.4 Clean</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            Generative Facial Prior GAN. Restores fine skin textures, eyebrows, eyes, and teeth from low-res, compressed, or blurry vintage portraits.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Target:</span> Face Crops</div>
+            <div><span class="text-gray-500">Latency:</span> ~62ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~4.1 GB</div>
+            <div><span class="text-gray-500">Prior:</span> StyleGAN-2</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#1d1f25] hover:bg-[#252830] text-gray-200 border border-[#262930] rounded text-xs font-semibold mt-3" data-model="gfpgan_v1.4">
+          Load into Pipeline
+        </button>
+      </div>
+
+      <!-- Card 4: Real-CUGAN Pro -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-0.5 rounded">Anime &amp; Illustration</span>
+            <span class="text-[10px] font-mono text-gray-400">28 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">Real-CUGAN Pro 3X</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            Cascaded U-Net GAN trained on millions of anime frames. Sharpens lineart without ringing artifacts and eliminates banding compression.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Scale:</span> 2X / 3X / 4X</div>
+            <div><span class="text-gray-500">Latency:</span> ~22ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~2.1 GB</div>
+            <div><span class="text-gray-500">Denoise:</span> Level 3</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#1d1f25] hover:bg-[#252830] text-gray-200 border border-[#262930] rounded text-xs font-semibold mt-3" data-model="real_cugan_pro">
+          Load into Pipeline
+        </button>
+      </div>
+
+      <!-- Card 5: BSRGAN -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded">Blind Degradation</span>
+            <span class="text-[10px] font-mono text-gray-400">65 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">BSRGAN Denoise x4</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            Blind Super-Resolution designed for real-world severely degraded video, heavy compression blockiness, and high ISO camera noise.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Scale:</span> 4X Scaling</div>
+            <div><span class="text-gray-500">Latency:</span> ~45ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~3.5 GB</div>
+            <div><span class="text-gray-500">Noise Filter:</span> Adaptive</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#1d1f25] hover:bg-[#252830] text-gray-200 border border-[#262930] rounded text-xs font-semibold mt-3" data-model="bsrgan_x4">
+          Load into Pipeline
+        </button>
+      </div>
+
+      <!-- Card 6: BasicVSR++ -->
+      <div class="bg-[#17191d] border border-[#262930] hover:border-[#373c46] rounded-md p-4 space-y-3 transition-colors flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] uppercase font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">Temporal Recurrent</span>
+            <span class="text-[10px] font-mono text-gray-400">88 MB</span>
+          </div>
+          <h3 class="text-sm font-bold text-gray-100 mt-2 font-mono">BasicVSR++ Recurrent</h3>
+          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+            Bidirectional recurrent network with optical-flow propagation. Guarantees temporal consistency with zero flicker across video frames.
+          </p>
+          <div class="grid grid-cols-2 gap-2 mt-3 text-[10px] font-mono bg-[#121316] p-2 rounded border border-[#262930]">
+            <div><span class="text-gray-500">Scale:</span> 4X Scaling</div>
+            <div><span class="text-gray-500">Latency:</span> ~58ms/f</div>
+            <div><span class="text-gray-500">VRAM:</span> ~5.2 GB</div>
+            <div><span class="text-gray-500">Flicker:</span> 0.00%</div>
+          </div>
+        </div>
+        <button class="btn-load-model w-full py-1.5 bg-[#1d1f25] hover:bg-[#252830] text-gray-200 border border-[#262930] rounded text-xs font-semibold mt-3" data-model="basicvsr_plus">
+          Load into Pipeline
+        </button>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ========================================================================= -->
+  <!-- SCREEN 5: HARDWARE & ENGINE SETTINGS (CẤU HÌNH PHẦN CỨNG & ENGINE)        -->
+  <!-- ========================================================================= -->
+  <main id="screen-settings" class="screen-content hidden flex-1 p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-100 uppercase tracking-wider flex items-center space-x-2">
+          <span>Hardware Acceleration &amp; Processing Engine Settings</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Configure CUDA execution providers, FP16 half precision, tile chunking memory budgets, and video export encoding.</p>
+      </div>
+
+      <button id="btnSaveEngineSettings" class="bg-[#b9f73a] hover:bg-[#c6ff47] text-black font-bold px-4 py-1.5 rounded text-xs flex items-center space-x-1.5 shadow-[0_0_10px_rgba(185,247,58,0.2)]">
+        <span>Save &amp; Apply Engine Config</span>
+      </button>
+    </div>
+
+    <div class="grid grid-cols-12 gap-4">
+      <!-- Section 1: GPU Accelerator -->
+      <div class="col-span-6 bg-[#17191d] border border-[#262930] rounded-md p-4 space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-[#b9f73a]"></span>
+          <span>GPU Compute &amp; Neural Inference Provider</span>
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">PRIMARY ACCELERATION DEVICE</label>
+            <select class="w-full bg-[#1e2026] border border-[#262930] rounded p-2 text-white font-mono">
+              <option selected>NVIDIA GeForce RTX 4090 24GB (CUDA 12.4, Compute 8.9)</option>
+              <option>DirectML Fallback (Universal DirectX 12)</option>
+              <option>Intel OneAPI / OpenVINO (CPU Fallback)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">INFERENCE EXECUTION BACKEND</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="flex items-center space-x-2 bg-[#121316] p-2 rounded border border-[#343842] cursor-pointer">
+                <input type="radio" name="backend" checked class="text-[#b9f73a] focus:ring-0"/>
+                <span class="text-white font-mono text-[11px]">TensorRT 10</span>
+              </label>
+              <label class="flex items-center space-x-2 bg-[#121316] p-2 rounded border border-[#262930] cursor-pointer">
+                <input type="radio" name="backend" class="text-[#b9f73a] focus:ring-0"/>
+                <span class="text-gray-300 font-mono text-[11px]">ONNX Runtime</span>
+              </label>
+              <label class="flex items-center space-x-2 bg-[#121316] p-2 rounded border border-[#262930] cursor-pointer">
+                <input type="radio" name="backend" class="text-[#b9f73a] focus:ring-0"/>
+                <span class="text-gray-300 font-mono text-[11px]">PyTorch C++</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">PRECISION MODE</label>
+            <div class="flex items-center space-x-4">
+              <label class="flex items-center space-x-1.5 cursor-pointer">
+                <input type="checkbox" checked class="rounded bg-[#121316] border-[#343842] text-[#b9f73a] focus:ring-0"/>
+                <span class="text-gray-200">FP16 Half-Precision (2x Speed, Low VRAM)</span>
+              </label>
+              <label class="flex items-center space-x-1.5 cursor-pointer">
+                <input type="checkbox" class="rounded bg-[#121316] border-[#343842] text-[#b9f73a] focus:ring-0"/>
+                <span class="text-gray-400">INT8 Tensor Core Quantization</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">TILE OVERLAP SIZE (SEAM ARTIFACT PREVENTION)</label>
+            <div class="flex items-center space-x-2 font-mono">
+              <input type="range" min="8" max="64" step="8" value="32" class="w-full accent-[#b9f73a] bg-[#121316]"/>
+              <span class="text-[#b9f73a] font-bold">32px</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Video Encoding & Codecs -->
+      <div class="col-span-6 bg-[#17191d] border border-[#262930] rounded-md p-4 space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span>Master Video Output &amp; Encoding Codecs</span>
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">EXPORT CONTAINER &amp; CODEC</label>
+            <select class="w-full bg-[#1e2026] border border-[#262930] rounded p-2 text-white font-mono">
+              <option selected>MP4 - H.265 / HEVC NVENC (Hardware Accelerated)</option>
+              <option>MOV - Apple ProRes 422 HQ (Production Master 10-bit)</option>
+              <option>MKV - AV1 Hardware Encoder (Next-Gen High Efficiency)</option>
+              <option>MP4 - H.264 High Profile (Maximum Compatibility)</option>
+              <option>TAR - Uncompressed 16-bit PNG Image Sequence</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-400 text-[10px] mb-1">BITRATE ENCODING STRATEGY</label>
+            <div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div class="bg-[#121316] p-2 rounded border border-[#262930]">
+                <div class="text-gray-500 text-[9px]">QUALITY PROFILE</div>
+                <div class="text-[#b9f73a] font-bold">Constant Rate Factor (CRF 16)</div>
+              </div>
+              <div class="bg-[#121316] p-2 rounded border border-[#262930]">
+                <div class="text-gray-500 text-[9px]">COLOR SPACE</div>
+                <div class="text-white font-bold">BT.709 / Rec.2020 HDR</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-1 border-t border-[#262930]">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked class="rounded bg-[#121316] border-[#343842] text-[#b9f73a] focus:ring-0"/>
+              <span class="text-gray-200">Preserve original multi-channel audio tracks (Passthrough 5.1/Stereo)</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked class="rounded bg-[#121316] border-[#343842] text-[#b9f73a] focus:ring-0"/>
+              <span class="text-gray-200">Transfer subtitle tracks and timecode metadata</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: EXPORT VIDEO DIALOG                                                -->
+  <!-- ========================================================================= -->
+  <div id="exportModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#17191d] border border-[#262930] rounded-lg w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[#262930] pb-3">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-gray-100 flex items-center space-x-2">
+          <span class="text-[#b9f73a]">⬇</span>
+          <span>Export Upscaled Master Video</span>
+        </h3>
+        <button id="btnCloseExportModal" class="text-gray-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-gray-400 text-[10px] mb-1">OUTPUT FILENAME</label>
+          <input type="text" id="exportFilenameInput" value="DOWNTOWN_DRIVE_4K_ENHANCED.mp4" class="w-full bg-[#121316] border border-[#262930] rounded px-3 py-1.5 text-white font-mono"/>
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-[10px] mb-1">TARGET RESOLUTION</label>
+          <div id="exportTargetResolution" class="text-[#b9f73a] font-mono font-bold bg-[#121316] p-2 rounded border border-[#262930]">
+            5120 x 2880 (4X)
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-[10px] mb-1">EXPORT FORMAT</label>
+          <select class="w-full bg-[#121316] border border-[#262930] rounded px-3 py-1.5 text-white font-mono">
+            <option>MP4 (H.265 / HEVC High Quality)</option>
+            <option>Apple ProRes 422 HQ (.mov)</option>
+            <option>ZIP Archive (PNG Frames 16-bit)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-[#262930]">
+        <button id="btnCancelExport" class="px-3 py-1.5 bg-[#1d1f25] hover:bg-[#262930] text-gray-300 rounded text-xs">Cancel</button>
+        <button id="btnConfirmExport" class="px-4 py-1.5 bg-[#b9f73a] hover:bg-[#c6ff47] text-black font-bold rounded text-xs flex items-center space-x-1">
+          <span>Start Rendering Export</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: KEYBOARD SHORTCUTS HELP                                            -->
+  <!-- ========================================================================= -->
+  <div id="shortcutsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#17191d] border border-[#262930] rounded-lg w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[#262930] pb-2">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-gray-100 font-mono">Studio Keyboard Shortcuts</h3>
+        <button id="btnCloseShortcuts" class="text-gray-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-2 text-xs font-mono">
+        <div class="flex justify-between py-1 border-b border-[#262930]/40">
+          <span class="text-gray-400">Play / Pause</span>
+          <kbd class="bg-[#22252c] text-[#b9f73a] px-2 py-0.5 rounded border border-[#343842]">Space</kbd>
+        </div>
+        <div class="flex justify-between py-1 border-b border-[#262930]/40">
+          <span class="text-gray-400">Step 1 Frame Back</span>
+          <kbd class="bg-[#22252c] text-white px-2 py-0.5 rounded border border-[#343842]">J / ←</kbd>
+        </div>
+        <div class="flex justify-between py-1 border-b border-[#262930]/40">
+          <span class="text-gray-400">Step 1 Frame Forward</span>
+          <kbd class="bg-[#22252c] text-white px-2 py-0.5 rounded border border-[#343842]">L / →</kbd>
+        </div>
+        <div class="flex justify-between py-1 border-b border-[#262930]/40">
+          <span class="text-gray-400">Start / Pause Inference</span>
+          <kbd class="bg-[#22252c] text-[#b9f73a] px-2 py-0.5 rounded border border-[#343842]">I</kbd>
+        </div>
+        <div class="flex justify-between py-1 border-b border-[#262930]/40">
+          <span class="text-gray-400">Toggle Loupe Magnifier</span>
+          <kbd class="bg-[#22252c] text-white px-2 py-0.5 rounded border border-[#343842]">M</kbd>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast Notification Container -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-[#17191d] border border-[#b9f73a] text-white px-4 py-2.5 rounded-md shadow-2xl flex items-center space-x-2 text-xs font-mono">
+    <span class="text-[#b9f73a]">✓</span>
+    <span id="toastMessage">Inference completed successfully.</span>
+  </div>
+
+  <!-- Main Application Logic Script -->
+  <script src="app.js"></script>
+</body>
+</html>
