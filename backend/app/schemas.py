@@ -38,6 +38,10 @@ class ModelItem(BaseModel):
     scale: int = Field(4, example=4)
     available: bool = Field(True, example=True)
     device: str = Field(..., example="cpu")
+    checkpoint_filename: str = ""
+    checkpoint_path: str = ""
+    loaded: bool = False
+    error: Optional[str] = None
 
 
 class ModelsResponse(BaseModel):
@@ -52,6 +56,7 @@ class ImageSize(BaseModel):
 class UpscaleResponse(BaseModel):
     result_id: str = Field(..., example="c7b19a12-8720-4a88-8120-0082496a84d9")
     model_id: str = Field(..., example="realbasicvsr_anime_v3")
+    checkpoint_filename: str = ""
     scale: int = Field(4, example=4)
     input_size: ImageSize
     output_size: ImageSize
@@ -85,6 +90,9 @@ class VideoJobCreateResponse(BaseModel):
 
 class VideoJobStatusResponse(BaseModel):
     job_id: str
+    model_id: str = ""
+    checkpoint_filename: str = ""
+    device: Optional[str] = None
     status: str  # pending | probing | decoding | inferring | encoding | completed | failed
     progress_percent: float = 0.0
     current_frame: int = 0

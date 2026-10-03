@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import CropSelection from './CropSelection';
+import CropCompareDialog from './CropCompareDialog';
+import ModelSelector from './ModelSelector';
+import { captureComparison, seekVideoFrame } from '../utils/cropComparison';
 import {
   probeVideo,
   submitVideoUpscale,
@@ -13,7 +17,8 @@ const CHUNK_PRESETS = [
   { size: 16, label: '16 frames' },
 ];
 
-export default function VideoStudio({ health }) {
+export default function VideoStudio({ health, modelSelectorProps }) {
+  const { models, selectedModel, isSwitchingModel } = modelSelectorProps;
   const [selectedFile, setSelectedFile] = useState(null);
   const [sourceUrl, setSourceUrl] = useState(null);
   const [probeData, setProbeData] = useState(null);
@@ -42,6 +47,10 @@ export default function VideoStudio({ health }) {
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'single_sr' | 'single_orig'
+  const [cropMode, setCropMode] = useState(false);
+  const [cropComparison, setCropComparison] = useState(null);
+  const [cropError, setCropError] = useState(null);
+  const [cropBusy, setCropBusy] = useState(false);
 
   const fileInputRef = useRef(null);
   const sourceUrlRef = useRef(null);
@@ -62,7 +71,8 @@ export default function VideoStudio({ health }) {
     probeData.total_frames > videoLimits.max_frames ||
     (probeData.width * probeData.height) > videoLimits.max_input_pixels
   ));
-  const canStart = Boolean(selectedFile && probeData && !isLimitExceeded && !isProbing && !isProcessing && !isSubmitting);
+  const hasSelectedModel = models.some((model) => model.id === selectedModel && model.available);
+  const canStart = Boolean(selectedFile && probeData && hasSelectedModel && health?.status === 'ok' && !isSwitchingModel && !isLimitExceeded && !isProbing && !isProcessing && !isSubmitting);
 
 
   // Cleanup on unmount
@@ -106,6 +116,10 @@ export default function VideoStudio({ health }) {
   };
 
   const resetState = () => {
+    setCropMode(false);
+    setCropComparison(null);
+    setCropError(null);
+    setCropBusy(false);
     originalVideoRef.current?.pause();
     srVideoRef.current?.pause();
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -145,13 +159,13 @@ export default function VideoStudio({ health }) {
 
   // Submit upscale job
   const handleStartUpscale = async () => {
-    if (!selectedFile || isSubmitting || isProbing) return;
+    if (!canStart) return;
     resetState();
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      const createRes = await submitVideoUpscale(selectedFile, chunkSize, overlap);
+      const createRes = await submitVideoUpscale(selectedFile, chunkSize, overlap, null, selectedModel);
       const jobId = createRes.job_id;
       setActiveJobId(jobId);
 
@@ -246,7 +260,35 @@ export default function VideoStudio({ health }) {
   };
 
   // Synchronized playback controls
+  const pauseForCrop = () => {
+    originalVideoRef.current?.pause();
+    srVideoRef.current?.pause();
+    shouldResumeRef.current = false;
+    setIsPlaying(false);
+  };
+
+  const compareVideoCrop = async (selection) => {
+    if (cropBusy) return;
+    const original = originalVideoRef.current;
+    const result = srVideoRef.current;
+    if (!original || !result) return;
+    pauseForCrop();
+    setCropError(null);
+    setCropBusy(true);
+    try {
+      const time = original.currentTime;
+      await Promise.all([seekVideoFrame(original, time), seekVideoFrame(result, time)]);
+      if (originalVideoRef.current !== original || srVideoRef.current !== result) return;
+      setCropComparison({ ...captureComparison(original, result, selection), time });
+    } catch (error) {
+      setCropError(error.message || 'Không thể crop khung hình video.');
+    } finally {
+      setCropBusy(false);
+    }
+  };
+
   const togglePlay = () => {
+    if (cropMode || cropBusy || cropComparison) return;
     const v1 = originalVideoRef.current;
     const v2 = srVideoRef.current;
     const videos = [v1, v2].filter(Boolean);
@@ -460,6 +502,12 @@ export default function VideoStudio({ health }) {
           )}
 
           {/* Configuration Settings */}
+          <ModelSelector {...modelSelectorProps} disabled={isProcessing || isSubmitting} />
+          {jobStatus?.checkpoint_filename && (
+            <p className="text-[11px] font-mono text-[#9aa2b1]">
+              Mô hình của tác vụ: {jobStatus.checkpoint_filename}
+            </p>
+          )}
           <div className="space-y-3">
             <label className="text-xs font-mono text-[#7d8494] block uppercase">
               Cấu hình Chunk Temporal Window
@@ -583,7 +631,7 @@ export default function VideoStudio({ health }) {
       {/* Right Column: Viewport & Synchronized Player */}
       <div className="flex-1 flex flex-col bg-[#0e0f12] overflow-hidden">
         {/* Top Control Bar */}
-        <div className="h-12 border-b border-[#20232b] px-6 flex items-center justify-between bg-[#14161b]">
+        <div className="min-h-12 border-b border-[#20232b] px-6 py-2 flex flex-wrap gap-2 items-center justify-between bg-[#14161b]">
           <div className="flex items-center space-x-3 text-xs font-mono">
             <span className="text-[#7d8494]">CHẾ ĐỘ XEM:</span>
             <div className="flex rounded bg-[#1c1f27] border border-[#272b35] p-0.5">
@@ -618,6 +666,21 @@ export default function VideoStudio({ health }) {
             </div>
           </div>
 
+          <button
+            type="button"
+            disabled={!isCompleted || cropBusy}
+            aria-pressed={cropMode}
+            onClick={() => {
+              pauseForCrop();
+              handleViewModeChange('split');
+              setCropMode((value) => !value);
+              setCropError(null);
+            }}
+            className={`rounded border px-3 py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed ${cropMode ? 'border-[#b9f73a] text-[#b9f73a]' : 'border-[#343842] text-white'}`}
+          >
+            {cropMode ? 'Hủy chọn vùng' : 'Crop & Zoom'}
+          </button>
+
           {/* Download button if completed */}
           {isCompleted && (
             <a
@@ -632,6 +695,10 @@ export default function VideoStudio({ health }) {
             </a>
           )}
         </div>
+
+        {cropMode && <p className="bg-[#14161b] px-6 py-2 text-xs text-[#b9f73a]">Video đã tạm dừng. Kéo một vùng trên video gốc để so sánh cùng frame trước/sau upscale.</p>}
+        {cropBusy && <p role="status" className="px-6 py-2 text-xs text-[#9aa2b1]">Đang đồng bộ frame để mở vùng crop...</p>}
+        {cropError && <p role="alert" className="px-6 py-2 text-xs text-red-300">{cropError}</p>}
 
         {/* Video Viewport Stage */}
         <div className="flex-1 flex items-center justify-center p-6 overflow-hidden relative">
@@ -655,7 +722,7 @@ export default function VideoStudio({ health }) {
                 {(viewMode === 'split' || viewMode === 'single_orig') && (
                   <div
                     onClick={togglePlay}
-                    className="flex-1 h-full flex flex-col items-center justify-center relative bg-[#13151b] rounded-xl border border-[#22252e] overflow-hidden cursor-pointer"
+                    className="flex-1 min-w-0 h-full flex flex-col items-center justify-center relative bg-[#13151b] rounded-xl border border-[#22252e] overflow-hidden cursor-pointer"
                   >
                     <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-black/60 backdrop-blur-md text-white border border-white/10 pointer-events-none">
                       GỐC: {probeData?.width}×{probeData?.height}
@@ -668,8 +735,9 @@ export default function VideoStudio({ health }) {
                       onEnded={handleEnded}
                       playsInline
                       muted={isMuted}
-                      className="max-h-full max-w-full object-contain pointer-events-none"
+                      className="absolute inset-0 block w-full h-full object-contain pointer-events-none"
                     />
+                    {cropMode && isCompleted && !cropBusy && <CropSelection mediaRef={originalVideoRef} onStart={pauseForCrop} onComplete={compareVideoCrop} />}
                   </div>
                 )}
 
@@ -677,7 +745,7 @@ export default function VideoStudio({ health }) {
                 {(viewMode === 'split' || viewMode === 'single_sr') && (
                   <div
                     onClick={isCompleted ? togglePlay : undefined}
-                    className={`flex-1 h-full flex flex-col items-center justify-center relative bg-[#13151b] rounded-xl border border-[#22252e] overflow-hidden ${
+                    className={`flex-1 min-w-0 h-full flex flex-col items-center justify-center relative bg-[#13151b] rounded-xl border border-[#22252e] overflow-hidden ${
                       isCompleted ? 'cursor-pointer' : ''
                     }`}
                   >
@@ -694,7 +762,7 @@ export default function VideoStudio({ health }) {
                         onEnded={handleEnded}
                         playsInline
                         muted={viewMode === 'split' ? true : isMuted}
-                        className="max-h-full max-w-full object-contain pointer-events-none"
+                        className="absolute inset-0 block w-full h-full object-contain pointer-events-none"
                       />
                     )}
 
@@ -720,6 +788,7 @@ export default function VideoStudio({ health }) {
                 <button
                   type="button"
                   onClick={togglePlay}
+                  disabled={cropMode || cropBusy}
                   className="w-9 h-9 rounded-lg bg-[#222630] hover:bg-[#2b303c] text-white flex items-center justify-center transition-all border border-[#303542]"
                 >
                   {isPlaying ? (
@@ -741,6 +810,7 @@ export default function VideoStudio({ health }) {
                   step="0.01"
                   value={currentTime}
                   onChange={handleSeek}
+                  disabled={cropBusy}
                   className="flex-1 accent-[#b9f73a] cursor-pointer"
                 />
 
@@ -760,6 +830,7 @@ export default function VideoStudio({ health }) {
           )}
         </div>
       </div>
+      {cropComparison && <CropCompareDialog comparison={cropComparison} onClose={() => setCropComparison(null)} />}
     </div>
   );
 }

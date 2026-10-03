@@ -22,6 +22,7 @@ from backend.app.schemas import (
     VideoJobStatusResponse,
     VideoProbeResponse,
 )
+from backend.app.model_registry import resolve_model_id
 from backend.app.video.job_manager import video_job_manager
 from backend.app.video.probe import VideoProbeError, probe_video
 
@@ -80,6 +81,7 @@ async def create_video_upscale_job(
     file: UploadFile = File(...),
     chunk_size: int = Form(DEFAULT_VIDEO_CHUNK_SIZE),
     overlap: int = Form(DEFAULT_VIDEO_OVERLAP),
+    model_id: str = Form(""),
 ):
     """Submit a video for asynchronous x4 super-resolution.
 
@@ -98,6 +100,11 @@ async def create_video_upscale_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"overlap ({overlap}) phải >= 1 và nhỏ hơn chunk_size ({chunk_size}).",
         )
+
+    try:
+        model_id = resolve_model_id(model_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     safe_name = sanitize_filename(file.filename)
     job_uuid = uuid.uuid4().hex
@@ -130,6 +137,7 @@ async def create_video_upscale_job(
         source_filename=safe_name,
         chunk_size=chunk_size,
         overlap=overlap,
+        model_id=model_id,
     )
 
     return VideoJobCreateResponse(

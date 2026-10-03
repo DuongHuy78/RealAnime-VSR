@@ -17,6 +17,7 @@ from backend.app.inference.realbasicvsr_pipeline import (
     pad_lq,
 )
 from backend.app.models.realbasicvsr_net import RealBasicVSRNet
+from backend.app.model_registry import discover_checkpoints
 
 
 class TestRealBasicVSR(unittest.TestCase):
@@ -24,7 +25,7 @@ class TestRealBasicVSR(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.ckpt_path = REPO_ROOT / "best.pth"
+        cls.ckpt_path = next(iter(discover_checkpoints().values()), REPO_ROOT / "best.pth")
         if cls.ckpt_path.is_file():
             cls.model, cls.device = load_realbasicvsr(cls.ckpt_path, device=torch.device("cpu"))
         else:
@@ -32,7 +33,7 @@ class TestRealBasicVSR(unittest.TestCase):
             cls.device = torch.device("cpu")
 
     def test_checkpoint_strict_loading(self):
-        """Verify best.pth exists and loads strictly into RealBasicVSRNet."""
+        """Verify a discovered checkpoint loads strictly into RealBasicVSRNet."""
         self.assertTrue(
             self.ckpt_path.is_file(),
             f"Checkpoint file '{self.ckpt_path}' must exist on disk.",

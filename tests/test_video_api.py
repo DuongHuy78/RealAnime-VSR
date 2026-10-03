@@ -16,7 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from backend.app.config import FFMPEG_BIN, WORK_DIR
 from backend.app.main import app
-from backend.app.model_registry import load_model_registry
+from backend.app.model_registry import activate_model, list_available_models, load_model_registry
 from backend.app.video.job_manager import video_job_manager
 
 
@@ -123,11 +123,12 @@ class TestVideoAPI(unittest.TestCase):
 
     def test_upscale_success_submission_returns_202(self):
         """POST /api/video/upscale should accept valid video and return 202 with job_id."""
+        selected = list_available_models()[-1]
         with open(self.sample_video, "rb") as f:
             resp = self.client.post(
                 "/api/video/upscale",
                 files={"file": ("sample.mp4", f, "video/mp4")},
-                data={"chunk_size": 7, "overlap": 2},
+                data={"chunk_size": 7, "overlap": 2, "model_id": selected.id},
             )
         self.assertEqual(resp.status_code, 202)
         data = resp.json()
@@ -140,6 +141,8 @@ class TestVideoAPI(unittest.TestCase):
         self.assertEqual(status_resp.status_code, 200)
         s_data = status_resp.json()
         self.assertEqual(s_data["job_id"], job_id)
+        self.assertEqual(s_data["model_id"], selected.id)
+        self.assertEqual(s_data["checkpoint_filename"], selected.checkpoint_filename)
         self.assertIn(s_data["status"], ("pending", "probing", "decoding", "inferring", "encoding", "completed"))
 
     def test_job_not_found_returns_404(self):
@@ -154,19 +157,26 @@ class TestVideoAPI(unittest.TestCase):
 
     def test_video_job_execution_lifecycle(self):
         """Execute complete job processing lifecycle and verify successful completion without unpack or lock errors."""
+        catalog = list_available_models()
+        selected = catalog[-1]
         job_id = video_job_manager.submit_job(
             input_path=self.sample_video,
             source_filename="lifecycle_test.mp4",
             chunk_size=7,
             overlap=2,
+            model_id=selected.id,
         )
         job = video_job_manager.get_job(job_id)
         self.assertIsNotNone(job)
+        # Switching the UI/registry after submission must not change this job.
+        activate_model(catalog[0].id)
 
         # Run _process_job synchronously in an event loop
         asyncio.run(video_job_manager._process_job(job))
 
         self.assertEqual(job.status, "completed", f"Job failed with error: {job.error_message}")
+        self.assertEqual(job.model_id, selected.id)
+        self.assertEqual(job.checkpoint_filename, selected.checkpoint_filename)
         self.assertIsNone(job.error_message)
         self.assertIsNotNone(job.output_path)
         self.assertTrue(job.output_path.is_file())

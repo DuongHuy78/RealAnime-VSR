@@ -26,6 +26,14 @@ Output lưu cục bộ ── URL preview/download ── Browser
 
 Trong bản demo local, Vite phục vụ frontend ở chế độ dev và Uvicorn phục vụ API. Backend là tiến trình Python duy nhất làm chủ model. Nếu dùng GPU có ít VRAM, xử lý một tác vụ inference tại một thời điểm là mặc định an toàn; chỉ tăng concurrency sau khi đo bộ nhớ và thời gian xử lý. Tránh nhiều worker Uvicorn vì mỗi worker sẽ có bản model riêng.
 
+Giới hạn ảnh đơn: mỗi cạnh tối đa 512 px; CUDA mặc định tối đa 262.144 pixel,
+CPU tối đa 102.400 pixel. Với `best.pth`, T=1, float32 trên GTX 1650 4 GB,
+ảnh 511×308 đã tạo output 2044×1232 trong 0,94 s (peak allocated 1549,6 MiB);
+ảnh 512×512 tạo output 2048×2048 trong 1,53 s (peak allocated 2462,1 MiB,
+peak reserved 3186,0 MiB). Đây là phép thử inference một lần cho mỗi kích thước,
+không phải cam kết tốc độ cho mọi ảnh. Frontend lấy giới hạn theo device thực tế
+từ `/api/health`; thay cấu hình cần khởi động lại backend.
+
 ## 3. Cấu trúc hiện có và phần dự kiến
 
 ```text
@@ -38,7 +46,7 @@ thi_giac_may_tinh/
 ├── README.md                 # Hướng dẫn chạy khung ứng dụng local
 ├── .gitignore                # Loại checkpoint, upload, output, venv, cache
 ├── realbasicvsr-animedb.ipynb # Notebook train/test hiện có
-├── best.pth                  # Checkpoint RealBasicVSR Anime V3 hiện có; không commit
+├── *.pth                     # Checkpoint RealBasicVSR (best_v3.pth, best_v4.pth...); không commit
 ├── index.html                # Prototype HTML cũ, chưa phải Vite app
 ├── app.js                    # Logic UI và mô phỏng inference của prototype cũ
 ├── styles.css                # CSS prototype cũ
@@ -85,7 +93,8 @@ Chỉ tạo những module cần cho chức năng đang triển khai. Nếu mã 
 | Endpoint | Mục đích | Ghi chú |
 | --- | --- | --- |
 | `GET /api/health` | Tình trạng API và device | Không bắt buộc load checkpoint trong health check |
-| `GET /api/models` | Model, scale hỗ trợ và trạng thái khả dụng | UI giai đoạn đầu chỉ dùng cấu hình x4 |
+| `GET /api/models` | Quét file .pth ở gốc, MODELS_DIR và CHECKPOINT_PATH | Trả id, checkpoint_filename/path, loaded, available, device, error; chưa nạp thì device=none |
+| `POST /api/models/{model_id}/activate` | Kiểm tra và kích hoạt checkpoint được chọn | Chờ khóa inference; lỗi checkpoint trả 422, ID không tồn tại trả 404 |
 | `POST /api/upscale` | Nhận `image`, `model_id`; chạy inference x4 | Trả `result_id`, kích thước input/output và `result_url` |
 | `GET /api/results/{result_id}` | Preview hoặc download kết quả | Chỉ truy cập ID do server tạo, không nhận đường dẫn tùy ý |
 
@@ -96,7 +105,7 @@ Giai đoạn 1 có thể dùng request đồng bộ. Với ảnh lớn hoặc vi
 | Endpoint | Method | Mục đích | Ghi chú |
 | --- | --- | --- | --- |
 | `/api/video/probe` | `POST` | Pre-flight probe video MP4 | Trả `VideoProbeResponse`: width, height, duration, fps, frame count, audio codec, codec H.264. |
-| `/api/video/upscale` | `POST` | Nộp video vào hàng đợi (HTTP 202) | Nhận `file`, `chunk_size` (mặc định 7), `overlap` (mặc định 2). Trả `job_id`. |
+| `/api/video/upscale` | `POST` | Nộp video vào hàng đợi (HTTP 202) | Nhận `file`, `model_id`, `chunk_size` (mặc định 7), `overlap` (mặc định 2). Trả `job_id`; job giữ model_id đã chọn. |
 | `/api/video/jobs/{job_id}` | `GET` | Polling trạng thái job | Trả tiến độ (%), current_frame, total_frames, current_chunk, eta_seconds, timing. |
 | `/api/video/jobs/{job_id}/stream` | `GET` | Server-Sent Events (SSE) | Stream realtime cập nhật frame/chunk/tiến độ tới React frontend. |
 | `/api/video/results/{job_id}` | `GET` | Xem trực tiếp video x4 | Stream tệp MP4 chuẩn `yuv420p` trên web player. |
@@ -134,6 +143,11 @@ Thử nghiệm trên clip anime gốc (320×240, 29.97 fps, 60 frames -> 1280×9
 
 ## 6. Giao diện người dùng: Dual-Mode Studio
 
+- **Chọn checkpoint:** `ModelSelector.jsx` dùng chung cho hai studio, hiển thị
+  tên/đường dẫn tương đối của file `.pth`, trạng thái nạp, thiết bị và lỗi.
+  Nút Làm mới quét danh sách; App cũng làm mới mỗi 15 giây. Chọn file gọi API
+  activate, khóa nút chạy trong lúc chuyển và cập nhật giới hạn ảnh theo device.
+  Kết quả ảnh/video giữ tên checkpoint đã dùng để không nhầm với lựa chọn mới.
 - **📷 Image Studio:** Chế độ ảnh siêu phân giải đơn lẻ, so sánh thanh trượt trước/sau (CompareSlider).
 - **🎬 Video Studio:** Chế độ video siêu phân giải chuyên nghiệp:
   - Pre-flight video inspector (kích thước, duration, fps, frames, codec, audio).
@@ -152,3 +166,40 @@ Thử nghiệm trên clip anime gốc (320×240, 29.97 fps, 60 frames -> 1280×9
 | **Giai đoạn 3 (V3)**| UI Video Studio: Dual-mode header, VideoStudio component, synchronized dual player | **HOÀN THÀNH 100%** |
 | **Giai đoạn 3 (V4)**| Benchmark mở rộng: Chunk 7 vs 12, unit tests 45/45 pass 100%, tài liệu hoá | **HOÀN THÀNH 100%** |
 
+
+## Registry nhiều checkpoint
+
+Backend quét `.pth` trực tiếp trong thư mục gốc và đệ quy trong `MODELS_DIR`,
+cộng file `CHECKPOINT_PATH` nếu có. Client chỉ gửi ID do registry tạo; không
+nhận đường dẫn tùy ý. ID cũ `realbasicvsr_anime_v3` được giữ cho checkpoint
+mặc định của phiên; tên hiển thị dùng tên file thực, kể cả V4. Lúc khởi động,
+ưu tiên `CHECKPOINT_PATH`, rồi thử checkpoint theo tên nếu cần.
+
+Checkpoint được nạp strict trên CPU bằng weights_only=True khi dùng lần đầu.
+Các model từng dùng được cache trên CPU; chỉ model đang active chuyển lên
+CUDA và warmup T=2. Chuyển model và inference ảnh/video giữ cùng RLock và
+semaphore; lấy model bên trong khóa để tránh dùng device cũ sau khi chuyển.
+Checkpoint không hợp lệ trả lỗi và giữ model cũ. Khi CUDA lỗi trong chế độ
+auto, model mới chạy CPU và API cập nhật device/giới hạn theo kết quả thực.
+Thay đổi mtime/size của file khiến lần dùng kế tiếp nạp lại checkpoint.
+
+`available=true` với file mới nghĩa là checkpoint có thể được chọn để kiểm
+tra, chưa chứng minh tương thích; `loaded=true` xác nhận model active đã nạp
+và warmup CUDA thành công nếu chạy GPU. File lỗi có `available=false`, `error`
+cụ thể và vẫn hiện trong danh sách để sửa/thử lại. Health chỉ đọc cache,
+không nạp model. Job video lưu `model_id` lúc gửi và activate ID đó trong khóa
+suốt inference; đổi model từ giao diện không thay ID của job đã gửi. Hai API
+ảnh/video mặc định dùng model active nếu không truyền `model_id`.
+
+## Crop & Zoom để so sánh chi tiết
+
+Sau khi có kết quả, Image Studio và Video Studio cho phép bật Crop & Zoom,
+kéo một vùng rồi thả để mở popup trước/sau. CropSelection quy đổi tọa độ theo
+phần hình thực tế, bỏ viền đen object-contain. cropComparison.js ánh xạ cùng
+vùng từ nguồn sang kết quả theo kích thước thật, chụp bằng canvas và phóng
+nguồn tới cùng kích thước crop kết quả. CropCompareDialog có zoom đồng bộ,
+Vừa khung / 100% / 200% / 400% / nút − và +, cùng cuộn đồng bộ. 100% ứng với
+một pixel output trên một CSS pixel. Video tạm dừng và seek hai player tới
+cùng thời điểm trước khi chụp. Escape, nút Đóng hoặc nhấn ngoài popup để đóng.
+Crop không chạy lại inference hoặc thay đổi file kết quả. Ảnh demo giữ nhãn
+minh họa. Kiểm thử hình học: node --test frontend/tests/cropComparison.test.js.

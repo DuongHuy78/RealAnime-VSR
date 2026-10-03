@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from backend.app.config import MAX_IMAGE_DIMENSION, MAX_IMAGE_PIXELS, MAX_IMAGE_PIXELS_GPU, MIN_IMAGE_DIMENSION, OUTPUTS_DIR, UPLOADS_DIR
 from backend.app.main import app
+from backend.app import model_registry
 from backend.app.storage import cleanup_old_files, is_valid_uuid
 
 
@@ -113,6 +114,47 @@ class TestAPI(unittest.TestCase):
             )
             self.assertEqual(res.status_code, 200)
 
+    def test_checkpoint_switch_and_inference_use_selected_file(self):
+        catalog = self.client.get("/api/models").json()["models"]
+        if len(catalog) < 2:
+            self.skipTest("Two checkpoints are required for switching integration test.")
+        initial_id = self.client.get("/api/health").json()["active_models_loaded"][0]
+        try:
+            for model in catalog:
+                activated = self.client.post(f"/api/models/{model['id']}/activate")
+                self.assertEqual(activated.status_code, 200, activated.text)
+                self.assertTrue(activated.json()["loaded"])
+                self.assertEqual(activated.json()["checkpoint_filename"], model["checkpoint_filename"])
+                with patch.object(model_registry, "load_realbasicvsr", side_effect=AssertionError("Cached checkpoint must not reload")):
+                    result = self.client.post(
+                        "/api/upscale",
+                        files={"image": ("switch.png", create_dummy_png_bytes(24, 32), "image/png")},
+                        data={"model_id": model["id"]},
+                    )
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(result.json()["checkpoint_filename"], model["checkpoint_filename"])
+                self.assertEqual(result.json()["output_size"], {"width": 96, "height": 128})
+                loaded = [item for item in self.client.get("/api/models").json()["models"] if item["loaded"]]
+                self.assertEqual([item["id"] for item in loaded], [model["id"]])
+                self.assertEqual(self.client.get("/api/health").json()["device"], result.json()["device"])
+        finally:
+            self.client.post(f"/api/models/{initial_id}/activate")
+
+    def test_activate_unknown_model_returns_404(self):
+        self.assertEqual(self.client.post("/api/models/unknown/activate").status_code, 404)
+
+    def test_activate_invalid_checkpoint_returns_422_and_keeps_current_model(self):
+        import tempfile
+        with tempfile.TemporaryDirectory(dir=model_registry.MODELS_DIR) as temp:
+            path = Path(temp) / "broken.pth"
+            path.write_bytes(b"invalid pytorch checkpoint")
+            initial = self.client.get("/api/health").json()["active_models_loaded"]
+            broken = next(model for model in self.client.get("/api/models").json()["models"] if model["checkpoint_filename"] == "broken.pth")
+            response = self.client.post(f"/api/models/{broken['id']}/activate")
+            self.assertEqual(response.status_code, 422)
+            self.assertIn("không tương thích", response.json()["detail"])
+            self.assertEqual(self.client.get("/api/health").json()["active_models_loaded"], initial)
+
     def test_download_query_param(self):
         """GET /api/results/{result_id}?download=true should include attachment header."""
         img_bytes = create_dummy_png_bytes(width=32, height=32)
@@ -182,13 +224,14 @@ class TestAPI(unittest.TestCase):
 
     def test_oversized_image_returns_400(self):
         """Uploading oversized image should return 400 Bad Request."""
-        # Each side is within 512, but 400 x 300 exceeds the 102,400-pixel budget.
+        # Exercise the CPU-sized pixel budget independently of the active device.
         img_bytes = create_dummy_png_bytes(width=400, height=300)
-        response = self.client.post(
-            "/api/upscale",
-            files={"image": ("large.png", img_bytes, "image/png")},
-            data={"model_id": "realbasicvsr_anime_v3"},
-        )
+        with patch("backend.app.main.MAX_IMAGE_PIXELS", 102400), patch("backend.app.main.MAX_IMAGE_PIXELS_GPU", 102400):
+            response = self.client.post(
+                "/api/upscale",
+                files={"image": ("large.png", img_bytes, "image/png")},
+                data={"model_id": "realbasicvsr_anime_v3"},
+            )
         self.assertEqual(response.status_code, 400)
         self.assertIn("vượt quá ngưỡng xử lý an toàn", response.json()["detail"])
 

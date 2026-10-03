@@ -29,18 +29,22 @@ from backend.app.config import (
 )
 from backend.app.inference.realbasicvsr_pipeline import infer_rb_single
 from backend.app.model_registry import (
+    ModelLoadError,
+    activate_model,
     get_active_model_ids,
     get_inference_semaphore,
     get_inference_lock,
     get_model,
     list_available_models,
     load_model_registry,
+    resolve_model_id,
 )
 
 from backend.app.schemas import (
     HealthResponse,
     ImageLimits,
     ImageSize,
+    ModelItem,
     ModelsResponse,
     UpscaleResponse,
     VideoLimits,
@@ -122,7 +126,7 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint: returns server status, active device, GPU name, and loaded models."""
     cuda_avail = torch.cuda.is_available()
-    active_model = get_model("realbasicvsr_anime_v3")
+    active_model = get_model()
     actual_device = str(active_model[1]) if active_model else "none"
     gpu_name = None
     if cuda_avail and 0 <= CUDA_DEVICE_INDEX < torch.cuda.device_count():
@@ -162,35 +166,59 @@ async def get_models():
     return ModelsResponse(models=models)
 
 
+@app.post("/api/models/{model_id}/activate", response_model=ModelItem, tags=["Models"])
+async def activate_checkpoint(model_id: str):
+    """Switch checkpoints after current inference finishes, without a server restart."""
+    def run_activation():
+        with get_inference_lock():
+            activate_model(model_id)
+            return next(item for item in list_available_models() if item.id == model_id)
+
+    async with get_inference_semaphore():
+        try:
+            return await asyncio.to_thread(run_activation)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ModelLoadError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/api/upscale", response_model=UpscaleResponse, tags=["Inference"])
 async def upscale_image(
     image: UploadFile = File(..., description="Image file to upscale"),
-    model_id: str = Form("realbasicvsr_anime_v3", description="ID of the model to use"),
+    model_id: str = Form("", description="Checkpoint ID; defaults to the active model"),
 ):
     """Upscale a single image by 4x using specified AI model."""
-    # 1. Look up requested model in registry
-    model_entry = get_model(model_id)
-    if model_entry is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Model '{model_id}' không khả dụng hoặc chưa được nạp checkpoint.",
-        )
-    net, device = model_entry
+    # Pin the requested ID before waiting for inference or another model switch.
+    try:
+        model_id = resolve_model_id(model_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     # 2. Validate and read input image
-    max_pixels = MAX_IMAGE_PIXELS_GPU if device.type == "cuda" else MAX_IMAGE_PIXELS
-    img_rgb, width, height = await validate_and_read_image(image, max_pixels=max_pixels)
+    img_rgb, width, height = await validate_and_read_image(
+        image, max_pixels=max(MAX_IMAGE_PIXELS, MAX_IMAGE_PIXELS_GPU),
+    )
 
     # 3. Concurrency control: serialize CPU/GPU heavy inference
     semaphore = get_inference_semaphore()
     def run_inference():
         with get_inference_lock():
-            return infer_rb_single(net, img_rgb, device)
+            net, device = activate_model(model_id)
+            max_pixels = MAX_IMAGE_PIXELS_GPU if device.type == "cuda" else MAX_IMAGE_PIXELS
+            if width * height > max_pixels:
+                raise HTTPException(status_code=400, detail=f"Tổng số pixel ({width * height:,}) vượt quá ngưỡng xử lý an toàn ({max_pixels:,} pixels).")
+            checkpoint = next(item for item in list_available_models() if item.id == model_id)
+            return infer_rb_single(net, img_rgb, device), device, checkpoint.checkpoint_filename
 
     async with semaphore:
         t_start = time.perf_counter()
         try:
-            out_rgb = await asyncio.to_thread(run_inference)
+            out_rgb, device, checkpoint_filename = await asyncio.to_thread(run_inference)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ModelLoadError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except (MemoryError, torch.cuda.OutOfMemoryError) as exc:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -221,6 +249,7 @@ async def upscale_image(
     return UpscaleResponse(
         result_id=result_id,
         model_id=model_id,
+        checkpoint_filename=checkpoint_filename,
         scale=4,
         input_size=ImageSize(width=width, height=height),
         output_size=ImageSize(width=out_w, height=out_h),

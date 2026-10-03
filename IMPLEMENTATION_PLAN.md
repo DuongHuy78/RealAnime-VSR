@@ -110,6 +110,11 @@ Nguồn kỹ thuật: [PyTorch cài đặt trên Windows](https://pytorch.org/ge
 ## Phần mở rộng sau MVP
 
 1. **Nhiều model ảnh/anime:** thêm checkpoint và metadata vào model registry; chỉ công bố x4 nếu checkpoint đó hỗ trợ x4. Nếu sau này muốn mở x2, thiết kế lại UI và API theo khả năng từng model.
+   **Đã triển khai lựa chọn checkpoint RealBasicVSR:** registry quét `.pth`
+   ở thư mục gốc và `MODELS_DIR`, API activate kiểm tra strict trước khi đổi,
+   `ModelSelector` dùng chung cho ảnh/video, job giữ ID đã chọn, cache model
+   từng dùng trên CPU và chỉ giữ một model trên GPU. Hỗ trợ kiến trúc x4
+   hiện có (64 channels, 20 blocks); checkpoint kiến trúc khác báo lỗi khi nạp.
 2. **Video:** triển khai theo [VIDEO_IMPLEMENTATION_PLAN.md](VIDEO_IMPLEMENTATION_PLAN.md): CLI xử lý chunk bounded → API job bất đồng bộ → React video → đo và mở giới hạn. Người dùng chọn `chunk_size` đã được benchmark; FFmpeg xử lý frame/FPS/audio/MP4. Dùng polling trước, WebSocket chỉ khi cần cập nhật realtime.
 3. **Đánh giá chất lượng:** chế độ riêng nhận ảnh ground truth đã căn chỉnh mới tính PSNR/SSIM; không dùng ảnh input làm ground truth cho ảnh output x4.
 

@@ -29,6 +29,20 @@ export async function fetchModels() {
   }
 }
 
+export async function activateModel(modelId) {
+  let res;
+  try {
+    res = await fetch(`/api/models/${encodeURIComponent(modelId)}/activate`, { method: 'POST' });
+  } catch {
+    throw new Error('Không thể kết nối backend để đổi mô hình. Kiểm tra FastAPI và thử lại.');
+  }
+  if (!res.ok) {
+    const error = await res.json().catch(() => null);
+    throw new Error(error?.detail || `Không thể đổi mô hình (${res.status}).`);
+  }
+  return res.json();
+}
+
 export async function upscaleImage(file, modelId = 'realbasicvsr_anime_v3', signal = null) {
   const formData = new FormData();
   formData.append('image', file);
@@ -96,11 +110,12 @@ export async function probeVideo(file, signal = null) {
 /**
  * Submit video for asynchronous super-resolution job (HTTP 202).
  */
-export async function submitVideoUpscale(file, chunkSize = 7, overlap = 2, signal = null) {
+export async function submitVideoUpscale(file, chunkSize = 7, overlap = 2, signal = null, modelId = '') {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('chunk_size', String(chunkSize));
   formData.append('overlap', String(overlap));
+  formData.append('model_id', modelId);
 
   const res = await fetch('/api/video/upscale', {
     method: 'POST',

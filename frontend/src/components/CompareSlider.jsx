@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import CropSelection from './CropSelection';
+import CropCompareDialog from './CropCompareDialog';
+import { captureComparison } from '../utils/cropComparison';
 
 export default function CompareSlider({
   originalUrl,
@@ -13,6 +16,20 @@ export default function CompareSlider({
   const activeMode = hasComparison ? viewMode : 'original';
   const containerRef = useRef(null);
   const isDragging = useRef(false);
+  const originalMediaRef = useRef(null);
+  const comparisonMediaRef = useRef(null);
+  const [cropMode, setCropMode] = useState(false);
+  const [cropComparison, setCropComparison] = useState(null);
+  const [cropError, setCropError] = useState(null);
+
+  function compareCrop(selection) {
+    try {
+      setCropError(null);
+      setCropComparison(captureComparison(originalMediaRef.current, comparisonMediaRef.current, selection));
+    } catch (error) {
+      setCropError(error.message || 'Không thể mở vùng crop.');
+    }
+  }
 
   const handlePointerDown = () => {
     isDragging.current = true;
@@ -62,9 +79,10 @@ export default function CompareSlider({
     : null;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#121316] overflow-hidden select-none">
+    <div className="flex-1 min-w-0 flex flex-col h-full bg-[#121316] overflow-hidden select-none">
+      <img ref={originalMediaRef} src={originalUrl} alt="" className="hidden" />
       {/* Viewport Toolbar */}
-      <div className="px-6 py-2.5 border-b border-[#262930] bg-[#17191d] flex items-center justify-between font-mono text-xs">
+      <div className="px-6 py-2.5 border-b border-[#262930] bg-[#17191d] flex flex-wrap gap-2 items-center justify-between font-mono text-xs">
         <div className="flex items-center space-x-2">
           <span className="text-[#7d8494]">CHẾ ĐỘ XEM:</span>
           <div className="inline-flex rounded-md bg-[#121316] p-0.5 border border-[#262930]">
@@ -97,6 +115,16 @@ export default function CompareSlider({
           </div>
         </div>
 
+        <button
+          type="button"
+          disabled={!hasComparison || isUpscaling}
+          aria-pressed={cropMode}
+          onClick={() => { setCropMode((value) => !value); setCropError(null); }}
+          className={`rounded border px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${cropMode ? 'border-[#b9f73a] text-[#b9f73a]' : 'border-[#343842] text-white'}`}
+        >
+          {cropMode ? 'Hủy chọn vùng' : 'Crop & Zoom'}
+        </button>
+
         {/* Download Button */}
         {hasComparison && !isDemoSample && downloadUrl && (
           <a
@@ -111,6 +139,9 @@ export default function CompareSlider({
         )}
       </div>
 
+      {cropMode && <p className="bg-[#17191d] px-6 py-2 text-xs text-[#b9f73a]">Kéo một vùng trên ảnh rồi thả để mở popup so sánh và zoom.</p>}
+      {cropError && <p role="alert" className="px-6 py-2 text-xs text-red-300">{cropError}</p>}
+
       {/* Main Viewport Container */}
       <div className="flex-1 relative flex items-center justify-center p-4 overflow-hidden bg-[#0d0e11]">
         <div
@@ -120,9 +151,10 @@ export default function CompareSlider({
         >
           {/* Base: comparison image or original when inference is not available */}
           <img
+            ref={comparisonMediaRef}
             src={comparisonUrl || originalUrl}
             alt={isDemoSample ? 'Ảnh minh họa' : 'Xem trước hình ảnh'}
-            className="block max-h-[calc(100vh-140px)] w-auto object-contain pointer-events-none"
+            className="block max-w-full max-h-[calc(100vh-140px)] w-auto object-contain pointer-events-none"
           />
 
           {/* Split Mode Overlay: Original image clipped */}
@@ -149,7 +181,7 @@ export default function CompareSlider({
           )}
 
           {/* Split Divider & Handle */}
-          {activeMode === 'split' && (
+          {activeMode === 'split' && !cropMode && (
             <div
               onPointerDown={handlePointerDown}
               className="absolute top-0 bottom-0 w-1 cursor-ew-resize z-20 slider-divider flex items-center justify-center"
@@ -167,6 +199,8 @@ export default function CompareSlider({
           <div className="absolute top-3 left-3 px-2.5 py-1 rounded bg-[#17191d]/80 backdrop-blur border border-[#262930] text-[10px] font-mono text-[#d1d5db]">
             ORIGINAL (1X)
           </div>
+
+          {cropMode && hasComparison && !isUpscaling && <CropSelection mediaRef={comparisonMediaRef} onComplete={compareCrop} />}
           <div className="absolute top-3 right-3 px-2.5 py-1 rounded bg-[#17191d]/80 backdrop-blur border border-[#262930] text-[10px] font-mono text-[#b9f73a]">
             {isDemoSample
               ? 'DEMO — ẢNH MINH HỌA'
@@ -194,6 +228,7 @@ export default function CompareSlider({
           )}
         </div>
       </div>
+      {cropComparison && <CropCompareDialog comparison={cropComparison} isDemo={isDemoSample} onClose={() => setCropComparison(null)} />}
     </div>
   );
 }

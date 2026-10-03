@@ -16,9 +16,11 @@ from backend.app.config import (
     WORK_DIR,
 )
 from backend.app.model_registry import (
+    activate_model,
     get_inference_lock,
     get_inference_semaphore,
-    get_model,
+    list_available_models,
+    resolve_model_id,
 )
 from backend.app.video.chunk_stream import compute_chunk_windows, stream_rb_video_chunks
 from backend.app.video.decode import decode_video_frames
@@ -33,6 +35,9 @@ class VideoJob:
     job_id: str
     source_filename: str
     input_path: Path
+    model_id: str = ""
+    checkpoint_filename: str = ""
+    device: Optional[str] = None
     chunk_size: int = DEFAULT_VIDEO_CHUNK_SIZE
     overlap: int = DEFAULT_VIDEO_OVERLAP
     output_path: Optional[Path] = None
@@ -56,6 +61,9 @@ class VideoJob:
         download_url = f"/api/video/results/{self.job_id}/download" if self.status == "completed" else None
         return {
             "job_id": self.job_id,
+            "model_id": self.model_id,
+            "checkpoint_filename": self.checkpoint_filename,
+            "device": self.device,
             "status": self.status,
             "progress_percent": round(self.progress_percent, 1),
             "current_frame": self.current_frame,
@@ -111,7 +119,10 @@ class VideoJobManager:
         source_filename: str,
         chunk_size: int = DEFAULT_VIDEO_CHUNK_SIZE,
         overlap: int = DEFAULT_VIDEO_OVERLAP,
+        model_id: str = "",
     ) -> str:
+        model_id = resolve_model_id(model_id)
+        checkpoint = next(item for item in list_available_models() if item.id == model_id)
         job_id = uuid.uuid4().hex
         out_video_path = VIDEO_OUTPUTS_DIR / f"{job_id}_x4.mp4"
 
@@ -119,6 +130,8 @@ class VideoJobManager:
             job_id=job_id,
             source_filename=source_filename,
             input_path=Path(input_path),
+            model_id=model_id,
+            checkpoint_filename=checkpoint.checkpoint_filename,
             chunk_size=chunk_size,
             overlap=overlap,
             output_path=out_video_path,
@@ -222,16 +235,6 @@ class VideoJobManager:
             job.updated_at = time.time()
             job.notify_subscribers()
 
-            # Acquire inference lock to safely serialize with single-image upscale
-            model_entry = get_model("realbasicvsr_anime_v3")
-            if not model_entry:
-                from backend.app.model_registry import load_model_registry
-                load_model_registry()
-                model_entry = get_model("realbasicvsr_anime_v3")
-            if not model_entry:
-                raise RuntimeError("Model 'realbasicvsr_anime_v3' chưa được nạp hoặc không khả dụng.")
-            net, device = model_entry
-
             t_inf_start = time.perf_counter()
 
             def on_inference_progress(done_frames: int, total: int, msg: str):
@@ -252,6 +255,8 @@ class VideoJobManager:
 
             def run_stream_chunks():
                 with get_inference_lock():
+                    net, device = activate_model(job.model_id)
+                    job.device = str(device)
                     return stream_rb_video_chunks(
                         net=net,
                         input_frames_dir=raw_frames_dir,

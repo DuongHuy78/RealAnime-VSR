@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import UploadPanel from './components/UploadPanel';
 import CompareSlider from './components/CompareSlider';
 import VideoStudio from './components/VideoStudio';
-import { fetchHealth, fetchModels, upscaleImage } from './api/client';
+import { activateModel, fetchHealth, fetchModels, upscaleImage } from './api/client';
 
 const DEMO_SAMPLES = [
   {
@@ -50,6 +50,10 @@ export default function App() {
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [isSwitchingModel, setIsSwitchingModel] = useState(false);
+  const [modelError, setModelError] = useState(null);
+  const modelSwitchRef = useRef(false);
+  const statusRequestRef = useRef(0);
   const [imageMeta, setImageMeta] = useState(() => createDemoMeta(DEMO_SAMPLES[0]));
   const [comparisonUrl, setComparisonUrl] = useState(DEMO_SAMPLES[0].after);
   const [isDemoSample, setIsDemoSample] = useState(true);
@@ -60,40 +64,53 @@ export default function App() {
   const requestRef = useRef(null);
   const requestVersionRef = useRef(0);
 
-  // Load initial backend health & models
+  const refreshBackendData = useCallback(async () => {
+    const version = ++statusRequestRef.current;
+    const [healthData, modelsData] = await Promise.all([fetchHealth(), fetchModels()]);
+    if (version !== statusRequestRef.current) return;
+    setHealth(healthData);
+    setIsCheckingHealth(false);
+    setModels(modelsData);
+    setSelectedModel((current) => modelsData.some((model) => model.id === current)
+      ? current
+      : (modelsData.find((model) => model.loaded)?.id || modelsData[0]?.id || ''));
+  }, []);
+
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadBackendData() {
-      setIsCheckingHealth(true);
-      const healthData = await fetchHealth();
-      if (isMounted) {
-        setHealth(healthData);
-        setIsCheckingHealth(false);
-      }
-
-      const modelsData = await fetchModels();
-      if (isMounted) {
-        const availableImageModels = modelsData.filter(
-          (model) => model.available && (!model.task || model.task === 'image_sr'),
-        );
-        setModels(availableImageModels);
-        setSelectedModel((current) =>
-          availableImageModels.some((model) => model.id === current)
-            ? current
-            : (availableImageModels[0]?.id || ''),
-        );
-      }
-    }
-
-    loadBackendData();
-    const interval = setInterval(loadBackendData, 15000);
-
+    refreshBackendData();
+    const interval = setInterval(refreshBackendData, 15000);
     return () => {
-      isMounted = false;
+      statusRequestRef.current += 1;
       clearInterval(interval);
     };
-  }, []);
+  }, [refreshBackendData]);
+
+  const handleSelectModel = async (modelId) => {
+    if (modelSwitchRef.current || isUpscaling) return;
+    const previousModel = selectedModel;
+    modelSwitchRef.current = true;
+    statusRequestRef.current += 1;
+    setSelectedModel(modelId);
+    setIsSwitchingModel(true);
+    setIsCheckingHealth(true);
+    setModelError(null);
+    try {
+      await activateModel(modelId);
+    } catch (error) {
+      setSelectedModel(previousModel);
+      setModelError(error.message || 'Không thể đổi mô hình. Kiểm tra kết nối backend.');
+    } finally {
+      await refreshBackendData();
+      modelSwitchRef.current = false;
+      setIsSwitchingModel(false);
+    }
+  };
+
+  const modelSelectorProps = {
+    models, selectedModel, onSelectModel: handleSelectModel,
+    onRefreshModels: () => { setIsCheckingHealth(true); return refreshBackendData(); }, isSwitchingModel,
+    isRefreshingModels: isCheckingHealth, modelError,
+  };
 
   // Read actual dimensions of the illustrative images, never placeholder dimensions.
   useEffect(() => {
@@ -148,7 +165,7 @@ export default function App() {
   };
 
   const handleRunUpscale = async () => {
-    if (requestRef.current || isUpscaling) return;
+    if (requestRef.current || isUpscaling || modelSwitchRef.current) return;
     if (!imageMeta?.file) {
       setUpscaleError('Vui lòng tải lên ảnh nguồn trước khi thực hiện siêu phân giải.');
       return;
@@ -201,9 +218,7 @@ export default function App() {
           {/* Left Column: Upload, Settings & Specs */}
           <UploadPanel
             imageMeta={imageMeta}
-            models={models}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
+            modelSelectorProps={modelSelectorProps}
             onImageSelected={handleImageSelected}
             onSelectSample={handleSelectSample}
             samples={DEMO_SAMPLES}
@@ -217,6 +232,7 @@ export default function App() {
 
           {/* Center / Right Viewport: Interactive Comparison */}
           <CompareSlider
+            key={`${imageMeta?.url || ''}|${comparisonUrl || ''}`}
             originalUrl={imageMeta?.url}
             comparisonUrl={comparisonUrl}
             isDemoSample={isDemoSample}
@@ -225,7 +241,7 @@ export default function App() {
           />
         </main>
       ) : (
-        <VideoStudio health={health} />
+        <VideoStudio health={health} modelSelectorProps={modelSelectorProps} />
       )}
     </div>
   );

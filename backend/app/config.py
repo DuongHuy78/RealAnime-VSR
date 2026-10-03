@@ -17,7 +17,7 @@ def configured_path(name: str, default: Path) -> Path:
     path = Path(value)
     return (path if path.is_absolute() else BACKEND_DIR / path).resolve()
 
-# Checkpoint paths
+# Preferred startup checkpoint; registry also discovers .pth files in root/models.
 CHECKPOINT_PATH = configured_path("CHECKPOINT_PATH", REPO_ROOT / "best.pth")
 
 # Storage directories
@@ -56,7 +56,8 @@ MIN_IMAGE_DIMENSION = int(os.getenv("MIN_IMAGE_DIMENSION", "16"))
 # Hardware device settings (auto | cuda | cpu)
 AI_DEVICE = os.getenv("AI_DEVICE", "auto").lower().strip()
 CUDA_DEVICE_INDEX = int(os.getenv("CUDA_DEVICE_INDEX", "0"))
-MAX_IMAGE_PIXELS_GPU = int(os.getenv("MAX_IMAGE_PIXELS_GPU", "102400"))
+# Verified with best.pth, T=1, float32 on GTX 1650 4 GB at 512 x 512.
+MAX_IMAGE_PIXELS_GPU = int(os.getenv("MAX_IMAGE_PIXELS_GPU", "262144"))
 
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 

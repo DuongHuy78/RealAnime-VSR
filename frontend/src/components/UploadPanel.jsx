@@ -1,10 +1,9 @@
 import React, { useRef } from 'react';
+import ModelSelector from './ModelSelector';
 
 export default function UploadPanel({
   imageMeta,
-  models,
-  selectedModel,
-  setSelectedModel,
+  modelSelectorProps,
   onImageSelected,
   onSelectSample,
   samples,
@@ -16,6 +15,7 @@ export default function UploadPanel({
   health,
 }) {
   const fileInputRef = useRef(null);
+  const { models, selectedModel, isSwitchingModel } = modelSelectorProps;
   const limits = health?.image_limits;
   const maxUploadBytes = limits?.max_upload_size_bytes ?? 15 * 1024 * 1024;
   const maxDimension = limits?.max_image_dimension ?? 512;
@@ -88,7 +88,7 @@ export default function UploadPanel({
 
   const isBackendOnline = Boolean(health && health.status === 'ok');
   const hasSelectedModel = models.some((model) => model.id === selectedModel && model.available);
-  const canUpscale = Boolean(imageMeta?.file && isBackendOnline && hasSelectedModel && !isUpscaling);
+  const canUpscale = Boolean(imageMeta?.file && isBackendOnline && hasSelectedModel && !isUpscaling && !isSwitchingModel);
 
   return (
     <div className="w-full lg:w-80 flex-shrink-0 flex flex-col space-y-4 bg-[#17191d] border-r border-[#262930] p-4 text-xs font-mono overflow-y-auto">
@@ -140,7 +140,8 @@ export default function UploadPanel({
           </div>
           <p className="text-white font-medium mb-1">Upload Source Image</p>
           <p className="text-[11px] text-[#7d8494]">Drag & drop or browse</p>
-          <p className="text-[10px] text-[#7d8494] mt-2">PNG, JPG, WEBP · ≤{maxUploadMb} MB · ≤{maxPixels.toLocaleString('vi-VN')} pixel</p>
+          <p className="text-[10px] text-[#7d8494] mt-2">PNG, JPG, WEBP · ≤{maxUploadMb} MB</p>
+          <p className="text-[10px] text-[#7d8494] mt-1">Mỗi cạnh ≤{maxDimension} px · Tổng ≤{maxPixels.toLocaleString('vi-VN')} pixel</p>
         </div>
       </div>
 
@@ -198,49 +199,10 @@ export default function UploadPanel({
       </div>
 
       {/* 4. Model Selection */}
-      <div className="bg-[#1d1f25] rounded-lg p-3.5 border border-[#262930] space-y-2">
-        <span className="text-[11px] font-semibold text-[#7d8494] uppercase tracking-wider block">
-          03 // AI Neural Model
-        </span>
-
-        {models.length === 0 ? (
-          <div className="w-full bg-[#17191d] border border-[#262930] rounded px-3 py-2 text-[#7d8494]">
-            Chưa có model ảnh khả dụng
-          </div>
-        ) : models.length === 1 ? (
-          <div className="w-full bg-[#17191d] border border-[#262930] rounded px-3 py-2 text-white flex items-center justify-between">
-            <span className="font-semibold text-white truncate">
-              {models[0].name}
-            </span>
-            <span className="px-1.5 py-0.5 rounded bg-[#262930] text-[#b9f73a] text-[10px] font-bold">
-              4X
-            </span>
-          </div>
-        ) : (
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={isUpscaling}
-            className="w-full bg-[#17191d] border border-[#262930] rounded px-3 py-2 text-white focus:outline-none focus:border-[#b9f73a] disabled:text-[#7d8494]"
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} (x{m.scale})
-              </option>
-            ))}
-          </select>
-        )}
-        <p className="text-[10px] text-[#7d8494] leading-relaxed">
-          {models.length > 0
-            ? 'Mô hình siêu phân giải x4 cho anime ở chế độ Single Frame (T=1).'
-            : 'Backend chưa công bố model ảnh sẵn sàng cho inference.'}
-          {health?.device && (
-            <span className="text-[#a1a1aa] block mt-1">
-              Thiết bị backend: <span className="text-[#b9f73a] font-semibold">{health.device.toUpperCase()}</span>
-            </span>
-          )}
-        </p>
-      </div>
+      <ModelSelector {...modelSelectorProps} disabled={isUpscaling} />
+      {resultMeta?.checkpoint_filename && (
+        <p className="text-[11px] text-[#9aa2b1]">Mô hình của kết quả: {resultMeta.checkpoint_filename}</p>
+      )}
 
       {/* 5. Primary Action Button */}
       <div className="pt-1">
